@@ -1,0 +1,201 @@
+# Example terraform.tfvars file
+# Copy this file to terraform.tfvars and update the values
+
+##############################################################
+# Required Variables
+##############################################################
+cluster_name      = "my-rosa-cluster"
+openshift_version = "4.19.3"
+aws_region        = "us-east-1"
+
+
+
+# AWS Account Configuration (optional - will auto-detect if not provided)
+# aws_account_id = "123456789012"           # AWS account where cluster will be deployed
+# aws_billing_account_id = "123456789012"   # AWS account for billing (defaults to aws_account_id)
+
+
+##############################################################
+# VPC Configuration
+##############################################################
+create_vpc = true
+vpc_cidr   = "10.0.0.0/16"
+
+# If using existing VPC, set create_vpc = false and provide:
+# IMPORTANT: For ROSA HCP clusters, you need both public and private subnets
+# aws_subnet_ids         = ["subnet-public1", "subnet-public2", "subnet-public3", "subnet-private1", "subnet-private2", "subnet-private3"]
+# aws_availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+# machine_cidr          = "10.0.0.0/16"
+# replicas              = 3
+
+##############################################################
+# Admin User Configuration
+##############################################################
+admin_username = "cluster-admin"
+# admin_password = "YourSecurePassword123!" # Optional, random password will be generated if not provided
+
+##############################################################
+# Cluster Configuration
+##############################################################
+private_cluster      = false
+compute_machine_type = "m5.xlarge"
+
+##############################################################
+# Optional Network Configuration
+##############################################################
+# service_cidr = "172.30.0.0/16"
+# pod_cidr     = "10.128.0.0/14"
+# host_prefix  = 23
+
+##############################################################
+# Machine Pools Configuration
+##############################################################
+create_additional_machine_pools = false
+enable_autoscaling              = false
+autoscaling_min_replicas        = 2
+autoscaling_max_replicas        = 10
+
+# Example additional machine pools configuration:
+# machine_pools = {
+#   "worker-pool-1" = {
+#     name          = "worker-pool-1"
+#     instance_type = "m5.2xlarge"
+#     replicas      = 3
+#     subnet_id     = "subnet-12345"
+#     labels = {
+#       "node-type" = "compute"
+#     }
+#     # Optional autoscaling configuration
+#     autoscaling = {
+#       min_replicas = 2
+#       max_replicas = 5
+#     }
+#   }
+#   "gpu-pool" = {
+#     name          = "gpu-pool"
+#     instance_type = "g4dn.xlarge"
+#     replicas      = 2
+#     subnet_id     = "subnet-67890"
+#     labels = {
+#       "node-type" = "gpu"
+#     }
+#     taints = [
+#       {
+#         key    = "gpu"
+#         value  = "true"
+#         effect = "NoSchedule"
+#       }
+#     ]
+#   }
+# }
+
+##############################################################
+# Bastion Host Configuration
+##############################################################
+create_bastion_host    = false
+bastion_instance_type  = "t3.micro"
+# bastion_ssh_key_name = "my-key-pair"  # Required if create_bastion_host = true
+
+##############################################################
+# Identity Providers Configuration
+##############################################################
+create_identity_providers = false
+
+# Example identity providers configuration:
+# identity_providers = {
+#   "github-idp" = {
+#     name     = "github-corp"
+#     idp_type = "github"
+#     github_idp_client_id     = "your-github-client-id"
+#     github_idp_client_secret = "your-github-client-secret"
+#     github_idp_organizations = ["your-github-org"]
+#     mapping_method           = "claim"
+#   }
+#   "htpasswd-idp" = {
+#     name     = "local-users"
+#     idp_type = "htpasswd"
+#     htpasswd_idp_users = [
+#       {
+#         username = "admin"
+#         password = "secure-password"
+#       },
+#       {
+#         username = "developer"
+#         password = "another-password"
+#       }
+#     ]
+#   }
+# }
+
+##############################################################
+# Roles and OIDC Configuration
+##############################################################
+create_account_roles  = true
+create_operator_roles = true
+create_oidc          = true
+managed_oidc         = true
+create_ocm_role      = false
+# ocm_role_name      = "ManagedOpenShift-OCM-Role"
+
+##############################################################
+# Encryption Configuration
+##############################################################
+enable_etcd_encryption = false
+enable_ebs_encryption  = false
+# etcd_kms_key_arn     = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+# kms_key_arn          = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+
+##############################################################
+# Proxy Configuration
+##############################################################
+enable_proxy = false
+# http_proxy              = "http://proxy.company.com:8080"
+# https_proxy             = "https://proxy.company.com:8080"
+# no_proxy                = "localhost,127.0.0.1,.company.com"
+# additional_trust_bundle = "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+
+##############################################################
+# Red Hat Cloud Services (RHCS) Authentication
+##############################################################
+# Option 1: Provide credentials via variables (not recommended for production)
+# rhcs_client_id     = "your-rhcs-client-id"
+# rhcs_client_secret = "your-rhcs-client-secret"
+
+# Option 2: Use environment variables (recommended)
+# export RHCS_CLIENT_ID="your-rhcs-client-id"
+# export RHCS_CLIENT_SECRET="your-rhcs-client-secret"
+
+# Optional: Custom OCM URL (default is production)
+# rhcs_url = "https://api.stage.openshift.com"  # For staging environment
+
+##############################################################
+# OpenShift GitOps Configuration
+##############################################################
+deploy_openshift_gitops = true
+deploy_vote_application        = true
+gitops_repo_url         = "https://github.com/sureshgaikwad/gitops-catalog"
+application_repo_path        = "vote-application"
+
+##############################################################
+# Operator Deployments
+##############################################################
+deploy_openshift_ai                      = false
+deploy_openshift_serverless             = false
+deploy_openshift_servicemesh            = false
+deploy_ai_model                         = false
+deploy_nfd		     = false
+deploy_nfd_application                  = false
+deploy_nvidia_gpu_operator   = false
+deploy_nvidia_gpu_operator_application = false
+deploy_openshift_lightspeed             = false
+deploy_authorino_operator               = false
+
+
+##############################################################
+# Tags
+##############################################################
+tags = {
+  Environment = "development"
+  Team        = "platform"
+  Project     = "rosa-cluster"
+}
