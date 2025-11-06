@@ -9,15 +9,13 @@ resource "null_resource" "create_keycloak_oauth_client" {
   count = var.deploy_keycloak && var.deploy_developerhub ? 1 : 0
 
   depends_on = [
-    null_resource.create_keycloak_application,
     null_resource.process_gitops_templates
   ]
 
   triggers = {
-    cluster_id            = module.rosa_cluster_hcp.cluster_id
-    keycloak_dependency   = null_resource.create_keycloak_application[0].id
-    oidc_client_secret    = random_password.oidc_client_secret[0].result
-    cluster_domain        = data.external.cluster_domain[0].result.domain
+    cluster_id         = module.rosa_cluster_hcp.cluster_id
+    oidc_client_secret = random_password.oidc_client_secret[0].result
+    cluster_domain     = data.external.cluster_domain[0].result.domain
   }
 
   provisioner "local-exec" {
@@ -96,7 +94,7 @@ resource "null_resource" "create_keycloak_oauth_client" {
       
       if [ -z "$EXISTING_CLIENT" ]; then
         echo "   Creating new OAuth client 'myclient'..."
-        HTTP_CODE=$(curl -k -s -w "%{http_code}" -o /dev/null -X POST "https://$KEYCLOAK_URL/admin/realms/myrealm/clients" \
+        HTTP_CODE=$(curl -k -s -w "%%{http_code}" -o /dev/null -X POST "https://$KEYCLOAK_URL/admin/realms/myrealm/clients" \
           -H "Authorization: Bearer $TOKEN" \
           -H "Content-Type: application/json" \
           -d "{
@@ -127,7 +125,7 @@ resource "null_resource" "create_keycloak_oauth_client" {
         fi
       else
         echo "   OAuth client already exists, updating..."
-        HTTP_CODE=$(curl -k -s -w "%{http_code}" -o /dev/null -X PUT "https://$KEYCLOAK_URL/admin/realms/myrealm/clients/$EXISTING_CLIENT" \
+        HTTP_CODE=$(curl -k -s -w "%%{http_code}" -o /dev/null -X PUT "https://$KEYCLOAK_URL/admin/realms/myrealm/clients/$EXISTING_CLIENT" \
           -H "Authorization: Bearer $TOKEN" \
           -H "Content-Type: application/json" \
           -d "{
@@ -179,6 +177,13 @@ resource "null_resource" "create_keycloak_oauth_client" {
 # Generate OIDC client secret at runtime
 resource "random_password" "oidc_client_secret" {
   count   = var.deploy_keycloak && var.deploy_developerhub ? 1 : 0
+  length  = 32
+  special = true
+}
+
+# Generate session secret at runtime
+resource "random_password" "session_secret" {
+  count   = var.deploy_developerhub ? 1 : 0
   length  = 32
   special = true
 }

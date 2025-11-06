@@ -1,7 +1,141 @@
+# Validate and fix ServiceMesh Control Plane after OpenShift AI deployment
+resource "null_resource" "validate_and_fix_smcp" {
+  count      = var.deploy_openshift_ai && local.deploy_openshift_servicemesh && var.deploy_openshift_gitops ? 1 : 0
+  depends_on = [null_resource.create_openshift_ai_application]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      #!/bin/bash
+      set -e
+      
+      echo "============================================================"
+      echo "  Validating ServiceMeshControlPlane Health"
+      echo "============================================================"
+      
+      # Login to cluster
+      oc login --username="${module.rosa_cluster_hcp.cluster_admin_username}" --password="${module.rosa_cluster_hcp.cluster_admin_password}" "${module.rosa_cluster_hcp.cluster_api_url}" --insecure-skip-tls-verify
+      
+      # Wait for SMCP to be created by DataScienceCluster
+      echo "Waiting for ServiceMeshControlPlane to be created..."
+      for i in $(seq 1 60); do
+        if oc get smcp data-science-smcp -n istio-system &>/dev/null; then
+          echo "SMCP found"
+          break
+        fi
+        if [ $i -eq 60 ]; then
+          echo "ERROR: SMCP was not created by OpenShift AI"
+          exit 1
+        fi
+        echo "Waiting for SMCP... (attempt $i/60)"
+        sleep 10
+      done
+      
+      # Check SMCP status
+      echo "Checking SMCP status..."
+      SMCP_READY=$(oc get smcp data-science-smcp -n istio-system -o jsonpath='{.status.annotations.readyComponentCount}' 2>/dev/null || echo "0")
+      SMCP_STATUS=$(oc get smcp data-science-smcp -n istio-system -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "False")
+      
+      echo "SMCP ready components: $SMCP_READY"
+      echo "SMCP status: $SMCP_STATUS"
+      
+      # Check for conversion webhook errors in istio-operator logs
+      echo "Checking for conversion webhook errors..."
+      WEBHOOK_ERRORS=$(oc logs -n openshift-operators -l name=istio-operator --tail=50 2>/dev/null | grep -c "failed to convert" || echo "0")
+      
+      if [ "$WEBHOOK_ERRORS" -gt "5" ] || [ "$SMCP_STATUS" != "True" ]; then
+        echo "⚠️  SMCP is in bad state or webhook errors detected. Recreating SMCP..."
+        
+        # Delete and let it recreate
+        oc delete smcp data-science-smcp -n istio-system || true
+        
+        echo "Waiting for SMCP to be recreated..."
+        sleep 30
+        
+        # Wait for SMCP to be recreated and become ready
+        for i in $(seq 1 60); do
+          if oc get smcp data-science-smcp -n istio-system &>/dev/null; then
+            SMCP_READY=$(oc get smcp data-science-smcp -n istio-system -o jsonpath='{.status.annotations.readyComponentCount}' 2>/dev/null || echo "0")
+            if [ "$SMCP_READY" = "5" ] || [ "$SMCP_READY" = "ComponentsReady" ]; then
+              echo "✅ SMCP is now ready with $SMCP_READY components"
+              break
+            fi
+          fi
+          if [ $i -eq 60 ]; then
+            echo "WARNING: SMCP did not become fully ready, but continuing..."
+            break
+          fi
+          echo "Waiting for SMCP to be ready... (attempt $i/60)"
+          sleep 10
+        done
+      else
+        echo "✅ SMCP is healthy"
+      fi
+      
+      # Wait for istio pods to be running
+      echo "Waiting for Istio control plane pods..."
+      for i in $(seq 1 30); do
+        ISTIOD_PODS=$(oc get pods -n istio-system -l app=istiod --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+        if [ "$ISTIOD_PODS" -gt "0" ]; then
+          echo "✅ Istiod pod is running"
+          break
+        fi
+        if [ $i -eq 30 ]; then
+          echo "WARNING: Istiod pod not running yet, but continuing..."
+          break
+        fi
+        echo "Waiting for istiod... (attempt $i/30)"
+        sleep 10
+      done
+      
+      # Validate and restart odh-model-controller if it's crash looping
+      echo "Checking odh-model-controller health..."
+      ODH_CONTROLLER_RESTARTS=$(oc get pods -n redhat-ods-applications -l control-plane=odh-model-controller -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}' 2>/dev/null || echo "0")
+      
+      if [ "$ODH_CONTROLLER_RESTARTS" -gt "10" ]; then
+        echo "⚠️  odh-model-controller has restarted $ODH_CONTROLLER_RESTARTS times. Restarting it..."
+        oc delete pod -n redhat-ods-applications -l control-plane=odh-model-controller || true
+        
+        echo "Waiting for odh-model-controller to be ready..."
+        sleep 30
+        
+        for i in $(seq 1 20); do
+          if oc get pods -n redhat-ods-applications -l control-plane=odh-model-controller --field-selector=status.phase=Running 2>/dev/null | grep -q "Running"; then
+            echo "✅ odh-model-controller is running"
+            break
+          fi
+          if [ $i -eq 20 ]; then
+            echo "WARNING: odh-model-controller not running yet, but continuing..."
+            break
+          fi
+          echo "Waiting for odh-model-controller... (attempt $i/20)"
+          sleep 10
+        done
+      else
+        echo "✅ odh-model-controller is healthy"
+      fi
+      
+      echo "============================================================"
+      echo "  ServiceMesh validation and recovery complete"
+      echo "============================================================"
+    EOT
+  }
+
+  triggers = {
+    cluster_id          = module.rosa_cluster_hcp.cluster_id
+    admin_username      = module.rosa_cluster_hcp.cluster_admin_username
+    admin_password      = module.rosa_cluster_hcp.cluster_admin_password
+    api_url             = module.rosa_cluster_hcp.cluster_api_url
+    deploy_openshift_ai = var.deploy_openshift_ai
+  }
+}
+
 # AI Model Deployment via ArgoCD
 resource "null_resource" "create_ai_model_application" {
   count      = var.deploy_ai_model && var.deploy_openshift_gitops ? 1 : 0
-  depends_on = [null_resource.create_openshift_ai_application]
+  depends_on = [
+    null_resource.create_openshift_ai_application,
+    null_resource.validate_and_fix_smcp
+  ]
 
   provisioner "local-exec" {
     command = <<-EOT

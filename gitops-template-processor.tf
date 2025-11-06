@@ -38,13 +38,13 @@ resource "null_resource" "process_gitops_templates" {
       CLUSTER_DOMAIN=$(oc --kubeconfig=$KUBECONFIG get ingress.config.openshift.io/cluster -o jsonpath='{.spec.domain}')
       echo "   Domain: $CLUSTER_DOMAIN"
       
-      # Generate secrets
+      # Use secrets from Terraform (same ones used by keycloak-oauth-client.tf)
       echo ""
-      echo "3. Generating secrets..."
-      OIDC_CLIENT_SECRET=$(openssl rand -base64 32 | tr -d '\n')
-      SESSION_SECRET=$(openssl rand -base64 32 | tr -d '\n')
-      echo "   + OIDC client secret"
-      echo "   + Session secret"
+      echo "3. Using Terraform-managed secrets..."
+      OIDC_CLIENT_SECRET="${var.deploy_developerhub ? random_password.oidc_client_secret[0].result : ""}"
+      SESSION_SECRET="${var.deploy_developerhub ? random_password.session_secret[0].result : ""}"
+      echo "   + OIDC client secret (from Terraform)"
+      echo "   + Session secret (from Terraform)"
       
       # Generate ArgoCD token
       echo ""
