@@ -70,85 +70,23 @@ resource "null_resource" "process_gitops_templates" {
       git config user.name "Terraform Automation"
       git config user.email "terraform@automation.local"
       
-      # Create Keycloak OAuth client via API
+      # Note: OAuth client is now created by Kubernetes Job in keycloak-client.yaml after Keycloak is deployed
+      # This ensures Keycloak exists before trying to create the client
+      
+      # Process Keycloak templates (generate keycloak-client.yaml with Job)
       if [ "${var.deploy_keycloak}" = "true" ]; then
         echo ""
-        echo "6.  Creating Keycloak OAuth client via Admin API..."
+        echo "6.  Processing Keycloak templates..."
+        cd operators/keycloak/base
         
-        # Wait for Keycloak to be ready
-        echo "   Waiting for Keycloak..."
-        for i in {1..30}; do
-          if oc --kubeconfig=$KUBECONFIG get route keycloak -n rhbk >/dev/null 2>&1; then
-            KEYCLOAK_URL=$(oc --kubeconfig=$KUBECONFIG get route keycloak -n rhbk -o jsonpath='{.spec.host}')
-            if curl -k -s "https://$KEYCLOAK_URL/realms/myrealm" 2>/dev/null | grep -q "myrealm"; then
-              echo "   Keycloak is ready"
-              break
-            fi
-          fi
-          sleep 10
-        done
-        
-        # Create/Update OAuth client
-        KEYCLOAK_URL=$(oc --kubeconfig=$KUBECONFIG get route keycloak -n rhbk -o jsonpath='{.spec.host}')
-        ADMIN_PASS=$(oc --kubeconfig=$KUBECONFIG get secret sample-kc-initial-admin -n rhbk -o jsonpath='{.data.password}' | base64 -d)
-        
-        # Get admin token
-        TOKEN=$(curl -k -s -X POST "https://$KEYCLOAK_URL/realms/master/protocol/openid-connect/token" \
-          -H "Content-Type: application/x-www-form-urlencoded" \
-          -d "username=admin" \
-          -d "password=$ADMIN_PASS" \
-          -d "grant_type=password" \
-          -d "client_id=admin-cli" | jq -r '.access_token')
-        
-        # Check if client exists
-        EXISTING_CLIENT=$(curl -k -s -X GET "https://$KEYCLOAK_URL/admin/realms/myrealm/clients" \
-          -H "Authorization: Bearer $TOKEN" | jq -r '.[] | select(.clientId=="myclient") | .id')
-        
-        if [ -z "$EXISTING_CLIENT" ]; then
-          echo "   Creating OAuth client 'myclient'..."
-          curl -k -s -X POST "https://$KEYCLOAK_URL/admin/realms/myrealm/clients" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"clientId\": \"myclient\",
-              \"name\": \"Developer Hub Client\",
-              \"enabled\": true,
-              \"protocol\": \"openid-connect\",
-              \"publicClient\": false,
-              \"standardFlowEnabled\": true,
-              \"directAccessGrantsEnabled\": false,
-              \"secret\": \"$OIDC_CLIENT_SECRET\",
-              \"redirectUris\": [
-                \"https://backstage-developer-hub-demo-project.$CLUSTER_DOMAIN/*\",
-                \"https://backstage-developer-hub-demo-project.$CLUSTER_DOMAIN/api/auth/oidc/handler/frame\"
-              ],
-              \"webOrigins\": [\"https://backstage-developer-hub-demo-project.$CLUSTER_DOMAIN\"],
-              \"defaultClientScopes\": [\"openid\", \"email\", \"profile\", \"roles\", \"web-origins\"]
-            }" > /dev/null
-          echo "   + OAuth client created"
-        else
-          echo "   Updating OAuth client 'myclient'..."
-          curl -k -s -X PUT "https://$KEYCLOAK_URL/admin/realms/myrealm/clients/$EXISTING_CLIENT" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"clientId\": \"myclient\",
-              \"name\": \"Developer Hub Client\",
-              \"enabled\": true,
-              \"protocol\": \"openid-connect\",
-              \"publicClient\": false,
-              \"standardFlowEnabled\": true,
-              \"directAccessGrantsEnabled\": false,
-              \"secret\": \"$OIDC_CLIENT_SECRET\",
-              \"redirectUris\": [
-                \"https://backstage-developer-hub-demo-project.$CLUSTER_DOMAIN/*\",
-                \"https://backstage-developer-hub-demo-project.$CLUSTER_DOMAIN/api/auth/oidc/handler/frame\"
-              ],
-              \"webOrigins\": [\"https://backstage-developer-hub-demo-project.$CLUSTER_DOMAIN\"],
-              \"defaultClientScopes\": [\"openid\", \"email\", \"profile\", \"roles\", \"web-origins\"]
-            }" > /dev/null
-          echo "   + OAuth client updated"
+        if [ -f "keycloak-client.yaml.template" ]; then
+          sed -e "s|{{CLUSTER_DOMAIN}}|$CLUSTER_DOMAIN|g" \
+              -e "s|{{OIDC_CLIENT_SECRET}}|$OIDC_CLIENT_SECRET|g" \
+              keycloak-client.yaml.template > keycloak-client.yaml
+          echo "   + keycloak-client.yaml generated (includes Job to create OAuth client)"
         fi
+        
+        cd ../../..
       fi
       
       # Process Developer Hub templates
