@@ -264,9 +264,9 @@ module "rhcs_hcp_machine_pool" {
 
   # AWS node pool configuration
   aws_node_pool = {
-    instance_type                 = try(each.value.instance_type, "m5.xlarge")
-    tags                          = merge(var.tags, try(each.value.tags, {}))
-    additional_security_group_ids = try(each.value.additional_security_group_ids, null)
+    instance_type                 = try(each.value.aws_node_pool.instance_type, try(each.value.instance_type, "m5.xlarge"))
+    tags                          = merge(var.tags, try(each.value.aws_node_pool.tags, try(each.value.tags, {})))
+    additional_security_group_ids = try(each.value.aws_node_pool.additional_security_group_ids, try(each.value.additional_security_group_ids, null))
   }
 
   # Subnet configuration - machine pools should use private subnets

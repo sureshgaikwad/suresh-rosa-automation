@@ -1,8 +1,8 @@
-# Wait for cluster to be ready before installing operators
+# Wait for cluster to be ready before installing operators (reduced wait time)
 resource "time_sleep" "wait_for_cluster" {
   count           = var.deploy_openshift_gitops ? 1 : 0
   depends_on      = [module.rosa_cluster_hcp]
-  create_duration = "120s"
+  create_duration = "30s"
 }
 
 # Wait for cluster and nodes to be ready before installing GitOps operator
@@ -19,17 +19,20 @@ resource "null_resource" "wait_for_cluster_and_nodes" {
       # Login to cluster
       oc login --username="${module.rosa_cluster_hcp.cluster_admin_username}" --password="${module.rosa_cluster_hcp.cluster_admin_password}" "${module.rosa_cluster_hcp.cluster_api_url}" --insecure-skip-tls-verify
       
-      # Wait for nodes to be ready (up to 10 minutes)
-      echo "Waiting for nodes to be ready (timeout: 10 minutes)..."
+      # Wait for at least 1 node to be ready (quick start for operators)
+      echo "Waiting for at least 1 node to be ready (timeout: 5 minutes)..."
       wait_start=$(date +%s)
       wait_timeout=300
+      
+      # Start operators as soon as 1 node is ready
+      MIN_READY_NODES=1
       
       while true; do
         current_time=$(date +%s)
         elapsed=$((current_time - wait_start))
         
         if [ $elapsed -ge $wait_timeout ]; then
-          echo "WARNING: Timeout waiting for nodes to be ready after 10 minutes, but continuing..."
+          echo "WARNING: Timeout waiting for nodes after 5 minutes, but continuing..."
           break
         fi
         
@@ -37,26 +40,27 @@ resource "null_resource" "wait_for_cluster_and_nodes" {
         total_nodes=$(oc get nodes --no-headers 2>/dev/null | wc -l || echo "0")
         echo "Ready nodes: $ready_nodes / Total nodes: $total_nodes (elapsed: $${elapsed}s)"
         
-        if [ "$ready_nodes" -gt 0 ]; then
-          echo "Node is available for scheduling pods!"
+        # Proceed as soon as we have at least 1 ready node
+        if [ "$ready_nodes" -ge "$MIN_READY_NODES" ]; then
+          echo "At least 1 node is ready! Starting operator deployment..."
           break
         fi
         
-        echo "Waiting for nodes to be ready... (checking again in 30 seconds)"
-        sleep 30
+        echo "Waiting for at least 1 node to be ready... (checking again in 15 seconds)"
+        sleep 15
       done
       
-      # Wait for OpenShift marketplace to be available
+      # Wait for OpenShift marketplace to be available (reduced timeout)
       echo "Waiting for OpenShift marketplace to be ready..."
       wait_start=$(date +%s)
-      wait_timeout=120
+      wait_timeout=180
       
       while true; do
         current_time=$(date +%s)
         elapsed=$((current_time - wait_start))
         
         if [ $elapsed -ge $wait_timeout ]; then
-          echo "WARNING: Timeout waiting for marketplace after 5 minutes, but continuing..."
+          echo "WARNING: Timeout waiting for marketplace after 3 minutes, but continuing..."
           break
         fi
         
@@ -66,7 +70,7 @@ resource "null_resource" "wait_for_cluster_and_nodes" {
         fi
         
         echo "Waiting for marketplace to be available... (elapsed: $${elapsed}s)"
-        sleep 15
+        sleep 10
       done
       
       echo "Cluster and nodes are ready for GitOps installation!"
@@ -90,6 +94,22 @@ resource "null_resource" "install_gitops_operator" {
     command = <<EOF
       # Login to cluster
       oc login --username="${module.rosa_cluster_hcp.cluster_admin_username}" --password="${module.rosa_cluster_hcp.cluster_admin_password}" "${module.rosa_cluster_hcp.cluster_api_url}" --insecure-skip-tls-verify
+
+      # Check if GitOps operator is already installed and ready
+      echo "Checking if GitOps operator is already installed..."
+      csv_name=$(oc get csv -n openshift-gitops 2>/dev/null | grep -i "openshift-gitops" | head -1 | awk '{print $1}' || echo "")
+      
+      if [ -z "$csv_name" ]; then
+        csv_name=$(oc get subscription openshift-gitops-operator -n openshift-gitops -o jsonpath='{.status.currentCSV}' 2>/dev/null || echo "")
+      fi
+      
+      if [ -n "$csv_name" ]; then
+        csv_phase=$(oc get csv "$csv_name" -n openshift-gitops -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        if [ "$csv_phase" = "Succeeded" ]; then
+          echo "GitOps operator is already installed and ready (CSV: $csv_name). Skipping installation."
+          exit 0
+        fi
+      fi
 
       # Create namespace
       oc apply -f - <<NAMESPACE_EOF
@@ -126,7 +146,81 @@ spec:
   sourceNamespace: openshift-marketplace
 SUBSCRIPTION_EOF
 
-      echo "GitOps operator installation initiated"
+      echo "GitOps operator subscription created, checking CSV status..."
+      
+      # Check for CSV immediately - if it's already Succeeded, proceed right away
+      echo "Checking if GitOps operator CSV is already ready..."
+      
+      csv_ready=false
+      
+      # Try multiple methods to find the CSV
+      csv_name=$(oc get csv -n openshift-gitops 2>/dev/null | grep -i "openshift-gitops" | head -1 | awk '{print $1}' || echo "")
+      
+      if [ -z "$csv_name" ]; then
+        # Try finding by subscription
+        csv_name=$(oc get subscription openshift-gitops-operator -n openshift-gitops -o jsonpath='{.status.currentCSV}' 2>/dev/null || echo "")
+      fi
+      
+      if [ -n "$csv_name" ]; then
+        # Get CSV phase/status
+        csv_phase=$(oc get csv "$csv_name" -n openshift-gitops -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        csv_conditions=$(oc get csv "$csv_name" -n openshift-gitops -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}' 2>/dev/null || echo "")
+        
+        echo "Found CSV: $csv_name, Phase: $csv_phase, Succeeded: $csv_conditions"
+        
+        if [ "$csv_phase" = "Succeeded" ] || [ "$csv_conditions" = "True" ]; then
+          echo "GitOps operator CSV is already ready (Succeeded)! Proceeding immediately."
+          csv_ready=true
+        fi
+      fi
+      
+      # If CSV not found or not Succeeded, wait briefly (max 2 minutes)
+      if [ "$csv_ready" = "false" ]; then
+        echo "CSV not ready yet, waiting up to 2 minutes..."
+        wait_start=$(date +%s)
+        wait_timeout=120
+        
+        while true; do
+          current_time=$(date +%s)
+          elapsed=$((current_time - wait_start))
+          
+          if [ $elapsed -ge $wait_timeout ]; then
+            echo "INFO: Timeout waiting for GitOps operator CSV after 2 minutes, but subscription exists. Continuing..."
+            break
+          fi
+          
+          # Check for CSV by name pattern
+          csv_name=$(oc get csv -n openshift-gitops 2>/dev/null | grep -i "openshift-gitops" | head -1 | awk '{print $1}' || echo "")
+          
+          if [ -z "$csv_name" ]; then
+            csv_name=$(oc get subscription openshift-gitops-operator -n openshift-gitops -o jsonpath='{.status.currentCSV}' 2>/dev/null || echo "")
+          fi
+          
+          if [ -n "$csv_name" ]; then
+            csv_phase=$(oc get csv "$csv_name" -n openshift-gitops -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            csv_conditions=$(oc get csv "$csv_name" -n openshift-gitops -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}' 2>/dev/null || echo "")
+            
+            echo "CSV: $csv_name, Phase: $csv_phase, Succeeded: $csv_conditions (elapsed: $${elapsed}s)"
+            
+            if [ "$csv_phase" = "Succeeded" ] || [ "$csv_conditions" = "True" ]; then
+              echo "GitOps operator CSV is ready (Succeeded)!"
+              break
+            fi
+            
+            # Proceed if CSV exists and is installing (don't wait too long)
+            if [ "$csv_phase" = "Installing" ] && [ $elapsed -ge 30 ]; then
+              echo "CSV is installing, proceeding after 30 seconds..."
+              break
+            fi
+          else
+            echo "Waiting for GitOps operator CSV to appear... (elapsed: $${elapsed}s)"
+          fi
+          
+          sleep 5
+        done
+      fi
+      
+      echo "GitOps operator installation check completed"
     EOF
   }
 
@@ -181,9 +275,10 @@ SUBSCRIPTION_EOF
   }
 }
 
-# Wait for GitOps operator to be installed
+# Wait for GitOps operator to be installed (minimal wait since we check CSV in install step)
+# If operator is already installed, the script exits immediately, so this sleep is minimal
 resource "time_sleep" "wait_for_gitops_operator" {
   count           = var.deploy_openshift_gitops ? 1 : 0
   depends_on      = [null_resource.install_gitops_operator]
-  create_duration = "120s"
+  create_duration = "2s"
 }

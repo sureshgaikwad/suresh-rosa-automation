@@ -637,28 +637,22 @@ variable "deploy_ai_model" {
   description = "Deploy AI model using ArgoCD"
 }
 
-variable "deploy_nvidia_gpu_operator" {
-  type        = bool
-  default     = false
-  description = "Deploy NVIDIA GPU operator via ArgoCD"
-}
-
 variable "deploy_openshift_servicemesh" {
   type        = bool
   default     = false
   description = "Deploy OpenShift Service Mesh operator via ArgoCD application"
 }
 
-variable "deploy_nfd_application" {
+variable "deploy_nfd" {
   type        = bool
   default     = false
-  description = "Deploy NodeFileDiscovery operator via ArgoCD using gitops-catalog repository"
+  description = "Deploy NodeFileDiscovery operator via ArgoCD"
 }
 
-variable "deploy_nvidia_gpu_operator_application" {
+variable "deploy_nvidia_gpu_operator" {
   type        = bool
   default     = false
-  description = "Deploy NVIDIA GPU operator via ArgoCD using gitops-catalog repository"
+  description = "Deploy NVIDIA GPU operator via ArgoCD"
 }
 
 variable "deploy_openshift_lightspeed" {
@@ -671,11 +665,6 @@ variable "deploy_authorino_operator" {
   type        = bool
   default     = false
   description = "Deploy Authorino operator via ArgoCD using gitops-catalog repository"
-}
-
-variable "deploy_nfd" {
-  type    = bool
-  default = true
 }
 
 variable "deploy_gpu_operator" {

@@ -168,12 +168,12 @@ output "openshift_servicemesh_enabled" {
 
 output "nfd_gitops_enabled" {
   description = "Whether NodeFileDiscovery operator is deployed via ArgoCD using GitOps catalog"
-  value       = local.deploy_nfd_application && var.deploy_openshift_gitops
+  value       = local.deploy_nfd && var.deploy_openshift_gitops
 }
 
 output "nvidia_gpu_operator_gitops_enabled" {
   description = "Whether NVIDIA GPU operator is deployed via ArgoCD using GitOps catalog"
-  value       = local.deploy_nvidia_gpu_operator_application && var.deploy_openshift_gitops
+  value       = local.deploy_nvidia_gpu_operator && var.deploy_openshift_gitops
 }
 
 output "openshift_lightspeed_enabled" {

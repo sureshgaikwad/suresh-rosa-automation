@@ -183,10 +183,8 @@ deploy_openshift_ai                      = false
 deploy_openshift_serverless             = false
 deploy_openshift_servicemesh            = false
 deploy_ai_model                         = false
-deploy_nfd		     = false
-deploy_nfd_application                  = false
-deploy_nvidia_gpu_operator   = false
-deploy_nvidia_gpu_operator_application = false
+deploy_nfd                              = false
+deploy_nvidia_gpu_operator              = false
 deploy_openshift_lightspeed             = false
 deploy_authorino_operator               = false
 

@@ -1,14 +1,16 @@
-# Create ArgoCD instance after GitOps operator is installed
+# Create ArgoCD instance and RBAC - simple, no waiting
 resource "null_resource" "create_argocd_instance" {
-  count      = var.deploy_vote_application && var.deploy_openshift_gitops ? 1 : 0
+  count      = var.deploy_openshift_gitops ? 1 : 0
   depends_on = [time_sleep.wait_for_gitops_operator]
 
   provisioner "local-exec" {
     command = <<EOF
-      # Login to cluster
-      oc login --username="${module.rosa_cluster_hcp.cluster_admin_username}" --password="${module.rosa_cluster_hcp.cluster_admin_password}" "${module.rosa_cluster_hcp.cluster_api_url}" --insecure-skip-tls-verify
+      oc login --username="${module.rosa_cluster_hcp.cluster_admin_username}" \
+               --password="${module.rosa_cluster_hcp.cluster_admin_password}" \
+               "${module.rosa_cluster_hcp.cluster_api_url}" \
+               --insecure-skip-tls-verify
 
-      # Create ArgoCD instance
+      # Create ArgoCD instance (idempotent)
       oc apply -f - <<ARGOCD_EOF
 apiVersion: argoproj.io/v1alpha1
 kind: ArgoCD
@@ -78,33 +80,19 @@ spec:
       - PipelineRun
 ARGOCD_EOF
 
-      echo "ArgoCD instance created"
-      
-      # Wait for ArgoCD pods to be ready
-      echo "Waiting for ArgoCD pods to be ready..."
-      sleep 30
-      
-      # Create ClusterRole for ArgoCD application controller
-      oc apply -f - <<CLUSTERROLE_EOF
+      # Create RBAC resources (idempotent)
+      oc apply -f - <<RBAC_EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: argocd-application-controller-cluster-role
 rules:
-- apiGroups:
-  - "*"
-  resources:
-  - "*"
-  verbs:
-  - "*"
-- nonResourceURLs:
-  - "*"
-  verbs:
-  - "*"
-CLUSTERROLE_EOF
-
-      # Create ClusterRoleBinding for ArgoCD application controller
-      oc apply -f - <<CLUSTERROLEBINDING_EOF
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+- nonResourceURLs: ["*"]
+  verbs: ["*"]
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -117,42 +105,19 @@ subjects:
 - kind: ServiceAccount
   name: openshift-gitops-argocd-application-controller
   namespace: openshift-gitops
-CLUSTERROLEBINDING_EOF
-
-      # Create ClusterRole for ArgoCD server
-      oc apply -f - <<SERVER_CLUSTERROLE_EOF
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: argocd-server-cluster-role
 rules:
-- apiGroups:
-  - "*"
-  resources:
-  - "*"
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - list
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - pods/log
-  verbs:
-  - get
-  - list
-  - watch
-SERVER_CLUSTERROLE_EOF
-
-      # Create ClusterRoleBinding for ArgoCD server
-      oc apply -f - <<SERVER_CLUSTERROLEBINDING_EOF
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events", "pods", "pods/log"]
+  verbs: ["get", "list", "watch"]
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -165,31 +130,27 @@ subjects:
 - kind: ServiceAccount
   name: openshift-gitops-argocd-server
   namespace: openshift-gitops
-SERVER_CLUSTERROLEBINDING_EOF
-
-      echo "ArgoCD RBAC permissions configured"
+RBAC_EOF
     EOF
   }
 
   triggers = {
-    cluster_id     = module.rosa_cluster_hcp.cluster_id
-    admin_username = module.rosa_cluster_hcp.cluster_admin_username
-    admin_password = module.rosa_cluster_hcp.cluster_admin_password
-    api_url        = module.rosa_cluster_hcp.cluster_api_url
+    cluster_id = module.rosa_cluster_hcp.cluster_id
   }
 }
 
-# Wait for ArgoCD to be ready
+# Minimal wait - just create applications, ArgoCD will sync when ready
 resource "time_sleep" "wait_for_argocd" {
-  count           = var.deploy_vote_application && var.deploy_openshift_gitops ? 1 : 0
-  depends_on      = [null_resource.create_argocd_instance]
-  create_duration = "120s"
+  count           = var.deploy_openshift_gitops ? 1 : 0
+  depends_on      = [null_resource.create_argocd_instance[0]]
+  create_duration = "5s"
 }
 
 # Create Vote Application
+# Applications can be created immediately after ArgoCD RBAC is set up
 resource "null_resource" "create_vote_application" {
   count      = var.deploy_vote_application && var.deploy_openshift_gitops ? 1 : 0
-  depends_on = [time_sleep.wait_for_argocd]
+  depends_on = [null_resource.create_argocd_instance]
 
   provisioner "local-exec" {
     command = <<EOF
