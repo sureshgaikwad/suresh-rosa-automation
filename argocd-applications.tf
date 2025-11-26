@@ -1,6 +1,6 @@
 # Create ArgoCD instance and RBAC - simple, no waiting
 resource "null_resource" "create_argocd_instance" {
-  count      = var.deploy_openshift_gitops ? 1 : 0
+  count      = local.deploy_openshift_gitops ? 1 : 0
   depends_on = [time_sleep.wait_for_gitops_operator]
 
   provisioner "local-exec" {
@@ -141,7 +141,7 @@ RBAC_EOF
 
 # Minimal wait - just create applications, ArgoCD will sync when ready
 resource "time_sleep" "wait_for_argocd" {
-  count           = var.deploy_openshift_gitops ? 1 : 0
+  count           = local.deploy_openshift_gitops ? 1 : 0
   depends_on      = [null_resource.create_argocd_instance[0]]
   create_duration = "5s"
 }
@@ -149,7 +149,7 @@ resource "time_sleep" "wait_for_argocd" {
 # Create Vote Application
 # Applications can be created immediately after ArgoCD RBAC is set up
 resource "null_resource" "create_vote_application" {
-  count      = var.deploy_vote_application && var.deploy_openshift_gitops ? 1 : 0
+  count      = var.deploy_vote_application && local.deploy_openshift_gitops ? 1 : 0
   depends_on = [null_resource.create_argocd_instance]
 
   provisioner "local-exec" {

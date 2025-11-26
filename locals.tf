@@ -10,19 +10,28 @@ locals {
 
   # Compute subnet IDs - when creating VPC, use both public and private subnets, otherwise use provided subnet IDs
   cluster_subnet_ids = var.create_vpc ? concat(module.vpc[0].public_subnets, module.vpc[0].private_subnets) : (var.aws_subnet_ids != null ? var.aws_subnet_ids : [])
-}##############################################################
+}
+
+##############################################################
 # OpenShift Features and Dependencies Logic
 ##############################################################
 
 locals {
   # Dependency logic: When OpenShift AI is enabled, automatically enable prerequisite operators
   # This ensures that all required dependencies are deployed when OpenShift AI is requested
-  deploy_nfd                             = var.deploy_openshift_ai ? true : var.deploy_nfd
-  deploy_nvidia_gpu_operator             = var.deploy_openshift_ai ? true : var.deploy_nvidia_gpu_operator
-  deploy_openshift_servicemesh           = var.deploy_openshift_ai ? true : var.deploy_openshift_servicemesh
-  deploy_openshift_serverless            = var.deploy_openshift_ai ? true : var.deploy_openshift_serverless
-  deploy_openshift_lightspeed            = var.deploy_openshift_ai ? true : var.deploy_openshift_lightspeed
-}##############################################################
+  deploy_nfd                   = var.deploy_openshift_ai ? true : var.deploy_nfd
+  deploy_nvidia_gpu_operator   = var.deploy_openshift_ai ? true : var.deploy_nvidia_gpu_operator
+  deploy_openshift_servicemesh = var.deploy_openshift_ai ? true : var.deploy_openshift_servicemesh
+  deploy_openshift_serverless  = var.deploy_openshift_ai ? true : var.deploy_openshift_serverless
+  deploy_openshift_lightspeed  = var.deploy_openshift_ai ? true : var.deploy_openshift_lightspeed
+
+  # Auto-enable GitOps if any operator or application is enabled
+  # This ensures ArgoCD is deployed when needed for operator deployments
+  # Note: Uses local variables for operators that have auto-enable logic (e.g., when OpenShift AI is enabled)
+  deploy_openshift_gitops = var.deploy_openshift_gitops || var.deploy_vote_application || var.deploy_openshift_ai || local.deploy_openshift_serverless || local.deploy_openshift_servicemesh || var.deploy_ai_model || local.deploy_nfd || local.deploy_nvidia_gpu_operator || local.deploy_openshift_lightspeed || var.deploy_authorino_operator || var.deploy_keycloak || var.deploy_developerhub || var.deploy_openshift_devspaces || var.deploy_openshift_virtualization || var.deploy_web_terminal || var.deploy_advance_cluster_management
+}
+
+##############################################################
 # IAM Roles and Policies Configuration
 ##############################################################
 

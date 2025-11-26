@@ -3,7 +3,7 @@
 # but BEFORE ArgoCD applications are created
 
 resource "null_resource" "process_gitops_templates" {
-  count = (var.deploy_keycloak || var.deploy_developerhub) && var.deploy_openshift_gitops ? 1 : 0
+  count = (var.deploy_keycloak || var.deploy_developerhub) && local.deploy_openshift_gitops ? 1 : 0
 
   # Must run after ArgoCD is ready but before creating applications
   depends_on = [

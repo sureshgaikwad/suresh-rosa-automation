@@ -684,6 +684,30 @@ variable "deploy_developerhub" {
   description = "Deploy Red Hat Developer Hub operator and instance via ArgoCD using gitops-catalog repository"
 }
 
+variable "deploy_openshift_devspaces" {
+  type        = bool
+  default     = false
+  description = "Deploy OpenShift DevSpaces operator via ArgoCD application"
+}
+
+variable "deploy_openshift_virtualization" {
+  type        = bool
+  default     = false
+  description = "Deploy OpenShift Virtualization operator via ArgoCD application"
+}
+
+variable "deploy_web_terminal" {
+  type        = bool
+  default     = false
+  description = "Deploy Web Terminal operator via ArgoCD application"
+}
+
+variable "deploy_advance_cluster_management" {
+  type        = bool
+  default     = false
+  description = "Deploy Advanced Cluster Management (ACM) operator via ArgoCD application"
+}
+
 ##############################################################
 # GitOps Configuration
 ##############################################################

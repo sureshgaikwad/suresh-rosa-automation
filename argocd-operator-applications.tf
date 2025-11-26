@@ -7,7 +7,7 @@
 # AI Model Application
 # ----------------------------------------------------------------------------
 resource "null_resource" "create_ai_model_application" {
-  count      = var.deploy_ai_model && var.deploy_openshift_gitops ? 1 : 0
+  count      = var.deploy_ai_model && local.deploy_openshift_gitops ? 1 : 0
   depends_on = [time_sleep.wait_for_argocd[0]]
 
   provisioner "local-exec" {
@@ -74,7 +74,7 @@ EOF
 # OpenShift AI Operator Application
 # ----------------------------------------------------------------------------
 resource "null_resource" "create_openshift_ai_application" {
-  count      = var.deploy_openshift_ai && var.deploy_openshift_gitops ? 1 : 0
+  count      = var.deploy_openshift_ai && local.deploy_openshift_gitops ? 1 : 0
   depends_on = [time_sleep.wait_for_argocd[0]]
 
   provisioner "local-exec" {
@@ -141,7 +141,7 @@ EOF
 # OpenShift Serverless Operator Application
 # ----------------------------------------------------------------------------
 resource "null_resource" "create_openshift_serverless_application" {
-  count      = local.deploy_openshift_serverless && var.deploy_openshift_gitops ? 1 : 0
+  count      = local.deploy_openshift_serverless && local.deploy_openshift_gitops ? 1 : 0
   depends_on = [time_sleep.wait_for_argocd[0]]
 
   provisioner "local-exec" {
@@ -208,7 +208,7 @@ EOF
 # OpenShift Service Mesh Operator Application
 # ----------------------------------------------------------------------------
 resource "null_resource" "create_openshift_servicemesh_application" {
-  count      = local.deploy_openshift_servicemesh && var.deploy_openshift_gitops ? 1 : 0
+  count      = local.deploy_openshift_servicemesh && local.deploy_openshift_gitops ? 1 : 0
   depends_on = [time_sleep.wait_for_argocd[0]]
 
   provisioner "local-exec" {
@@ -275,7 +275,7 @@ EOF
 # Node Feature Discovery (NFD) Operator Application
 # ----------------------------------------------------------------------------
 resource "null_resource" "create_nfd_gitops_application" {
-  count      = local.deploy_nfd && var.deploy_openshift_gitops ? 1 : 0
+  count      = local.deploy_nfd && local.deploy_openshift_gitops ? 1 : 0
   depends_on = [time_sleep.wait_for_argocd[0]]
 
   provisioner "local-exec" {
@@ -342,7 +342,7 @@ EOF
 # NVIDIA GPU Operator Application
 # ----------------------------------------------------------------------------
 resource "null_resource" "create_nvidia_gpu_gitops_application" {
-  count      = local.deploy_nvidia_gpu_operator && var.deploy_openshift_gitops ? 1 : 0
+  count      = local.deploy_nvidia_gpu_operator && local.deploy_openshift_gitops ? 1 : 0
   depends_on = [time_sleep.wait_for_argocd[0]]
 
   provisioner "local-exec" {
@@ -409,7 +409,7 @@ EOF
 # OpenShift Lightspeed Operator Application
 # ----------------------------------------------------------------------------
 resource "null_resource" "create_openshift_lightspeed_application" {
-  count      = local.deploy_openshift_lightspeed && var.deploy_openshift_gitops ? 1 : 0
+  count      = local.deploy_openshift_lightspeed && local.deploy_openshift_gitops ? 1 : 0
   depends_on = [time_sleep.wait_for_argocd[0]]
 
   provisioner "local-exec" {
@@ -475,7 +475,7 @@ EOF
 # Authorino Operator Application
 # ----------------------------------------------------------------------------
 resource "null_resource" "create_authorino_operator_application" {
-  count      = var.deploy_authorino_operator && var.deploy_openshift_gitops ? 1 : 0
+  count      = var.deploy_authorino_operator && local.deploy_openshift_gitops ? 1 : 0
   depends_on = [time_sleep.wait_for_argocd[0]]
 
   provisioner "local-exec" {
@@ -543,7 +543,7 @@ EOF
 # ----------------------------------------------------------------------------
 # Create Keycloak Operator Application via ArgoCD (GitOps Catalog)
 resource "null_resource" "create_keycloak_application" {
-  count = var.deploy_keycloak && var.deploy_openshift_gitops ? 1 : 0
+  count = var.deploy_keycloak && local.deploy_openshift_gitops ? 1 : 0
   depends_on = [
     time_sleep.wait_for_argocd[0]
   ]
@@ -659,7 +659,7 @@ EOT
 # Create Developer Hub Application via ArgoCD (GitOps Catalog)
 # Note: Must wait for template processor to generate required config files
 resource "null_resource" "create_developerhub_application" {
-  count = var.deploy_developerhub && var.deploy_openshift_gitops ? 1 : 0
+  count = var.deploy_developerhub && local.deploy_openshift_gitops ? 1 : 0
   depends_on = [
     time_sleep.wait_for_argocd[0],
     null_resource.create_keycloak_application,
@@ -741,5 +741,273 @@ EOT
     api_url             = module.rosa_cluster_hcp.cluster_api_url
     gitops_repo_url     = var.gitops_repo_url
     deploy_developerhub = var.deploy_developerhub
+  }
+}
+
+# ----------------------------------------------------------------------------
+# OpenShift DevSpaces Operator Application
+# ----------------------------------------------------------------------------
+resource "null_resource" "create_openshift_devspaces_application" {
+  count      = var.deploy_openshift_devspaces && local.deploy_openshift_gitops ? 1 : 0
+  depends_on = [time_sleep.wait_for_argocd[0]]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      #!/bin/bash
+      set -e
+      
+      if ! oc login --username="${module.rosa_cluster_hcp.cluster_admin_username}" \
+                    --password="${module.rosa_cluster_hcp.cluster_admin_password}" \
+                    "${module.rosa_cluster_hcp.cluster_api_url}" \
+                    --insecure-skip-tls-verify; then
+        echo "ERROR: Failed to login to OpenShift cluster"
+        exit 1
+      fi
+
+      if ! oc apply -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openshift-devspaces-operator
+  namespace: openshift-gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: ${var.gitops_repo_url}
+    targetRevision: HEAD
+    path: operators/openshift-devspaces
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-devspaces
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+EOF
+      then
+        echo "ERROR: Failed to create ArgoCD application"
+        exit 1
+      fi
+    EOT
+  }
+
+  triggers = {
+    cluster_id                 = module.rosa_cluster_hcp.cluster_id
+    gitops_repo_url            = var.gitops_repo_url
+    deploy_openshift_devspaces = var.deploy_openshift_devspaces
+  }
+}
+
+# ----------------------------------------------------------------------------
+# OpenShift Virtualization Operator Application
+# ----------------------------------------------------------------------------
+resource "null_resource" "create_openshift_virtualization_application" {
+  count      = var.deploy_openshift_virtualization && local.deploy_openshift_gitops ? 1 : 0
+  depends_on = [time_sleep.wait_for_argocd[0]]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      #!/bin/bash
+      set -e
+      
+      if ! oc login --username="${module.rosa_cluster_hcp.cluster_admin_username}" \
+                    --password="${module.rosa_cluster_hcp.cluster_admin_password}" \
+                    "${module.rosa_cluster_hcp.cluster_api_url}" \
+                    --insecure-skip-tls-verify; then
+        echo "ERROR: Failed to login to OpenShift cluster"
+        exit 1
+      fi
+
+      if ! oc apply -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openshift-virtualization-operator
+  namespace: openshift-gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: ${var.gitops_repo_url}
+    targetRevision: HEAD
+    path: operators/openshift-virtualization
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-cnv
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+EOF
+      then
+        echo "ERROR: Failed to create ArgoCD application"
+        exit 1
+      fi
+    EOT
+  }
+
+  triggers = {
+    cluster_id                      = module.rosa_cluster_hcp.cluster_id
+    gitops_repo_url                 = var.gitops_repo_url
+    deploy_openshift_virtualization = var.deploy_openshift_virtualization
+  }
+}
+
+# ----------------------------------------------------------------------------
+# Web Terminal Operator Application
+# ----------------------------------------------------------------------------
+resource "null_resource" "create_web_terminal_application" {
+  count      = var.deploy_web_terminal && local.deploy_openshift_gitops ? 1 : 0
+  depends_on = [time_sleep.wait_for_argocd[0]]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      #!/bin/bash
+      set -e
+      
+      if ! oc login --username="${module.rosa_cluster_hcp.cluster_admin_username}" \
+                    --password="${module.rosa_cluster_hcp.cluster_admin_password}" \
+                    "${module.rosa_cluster_hcp.cluster_api_url}" \
+                    --insecure-skip-tls-verify; then
+        echo "ERROR: Failed to login to OpenShift cluster"
+        exit 1
+      fi
+
+      if ! oc apply -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: web-terminal-operator
+  namespace: openshift-gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: ${var.gitops_repo_url}
+    targetRevision: HEAD
+    path: operators/web-terminal
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-web-terminal
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+EOF
+      then
+        echo "ERROR: Failed to create ArgoCD application"
+        exit 1
+      fi
+    EOT
+  }
+
+  triggers = {
+    cluster_id         = module.rosa_cluster_hcp.cluster_id
+    gitops_repo_url    = var.gitops_repo_url
+    deploy_web_terminal = var.deploy_web_terminal
+  }
+}
+
+# ----------------------------------------------------------------------------
+# Advanced Cluster Management (ACM) Operator Application
+# ----------------------------------------------------------------------------
+resource "null_resource" "create_advance_cluster_management_application" {
+  count      = var.deploy_advance_cluster_management && local.deploy_openshift_gitops ? 1 : 0
+  depends_on = [time_sleep.wait_for_argocd[0]]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      #!/bin/bash
+      set -e
+      
+      if ! oc login --username="${module.rosa_cluster_hcp.cluster_admin_username}" \
+                    --password="${module.rosa_cluster_hcp.cluster_admin_password}" \
+                    "${module.rosa_cluster_hcp.cluster_api_url}" \
+                    --insecure-skip-tls-verify; then
+        echo "ERROR: Failed to login to OpenShift cluster"
+        exit 1
+      fi
+
+      if ! oc apply -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: advance-cluster-management-operator
+  namespace: openshift-gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: ${var.gitops_repo_url}
+    targetRevision: HEAD
+    path: operators/advance-cluster-management
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: open-cluster-management
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+EOF
+      then
+        echo "ERROR: Failed to create ArgoCD application"
+        exit 1
+      fi
+    EOT
+  }
+
+  triggers = {
+    cluster_id                        = module.rosa_cluster_hcp.cluster_id
+    gitops_repo_url                   = var.gitops_repo_url
+    deploy_advance_cluster_management = var.deploy_advance_cluster_management
   }
 }

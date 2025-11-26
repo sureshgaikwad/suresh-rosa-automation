@@ -1,13 +1,13 @@
 # Wait for cluster to be ready before installing operators (reduced wait time)
 resource "time_sleep" "wait_for_cluster" {
-  count           = var.deploy_openshift_gitops ? 1 : 0
+  count           = local.deploy_openshift_gitops ? 1 : 0
   depends_on      = [module.rosa_cluster_hcp]
   create_duration = "30s"
 }
 
 # Wait for cluster and nodes to be ready before installing GitOps operator
 resource "null_resource" "wait_for_cluster_and_nodes" {
-  count      = var.deploy_openshift_gitops ? 1 : 0
+  count      = local.deploy_openshift_gitops ? 1 : 0
   depends_on = [time_sleep.wait_for_cluster]
 
   provisioner "local-exec" {
@@ -87,7 +87,7 @@ resource "null_resource" "wait_for_cluster_and_nodes" {
 
 # Install GitOps operator using oc commands for reliability
 resource "null_resource" "install_gitops_operator" {
-  count      = var.deploy_openshift_gitops ? 1 : 0
+  count      = local.deploy_openshift_gitops ? 1 : 0
   depends_on = [null_resource.wait_for_cluster_and_nodes]
 
   provisioner "local-exec" {
@@ -278,7 +278,7 @@ SUBSCRIPTION_EOF
 # Wait for GitOps operator to be installed (minimal wait since we check CSV in install step)
 # If operator is already installed, the script exits immediately, so this sleep is minimal
 resource "time_sleep" "wait_for_gitops_operator" {
-  count           = var.deploy_openshift_gitops ? 1 : 0
+  count           = local.deploy_openshift_gitops ? 1 : 0
   depends_on      = [null_resource.install_gitops_operator]
   create_duration = "2s"
 }
