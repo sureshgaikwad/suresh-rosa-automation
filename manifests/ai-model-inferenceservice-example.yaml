@@ -1,0 +1,31 @@
+# Reference InferenceService for the models project (fixes OOM/crash)
+# Copy to your gitops-catalog repo: ai-models/mistral/ (or merge the resources block
+# below into your existing InferenceService). Deploy in namespace: models
+#
+# Resource requests/limits are set for a GPU node that can satisfy them (e.g. g4dn.8xlarge).
+# If the model pod crashes (CrashLoopBackOff / OOMKilled), ensure:
+# 1. GPU node has enough CPU and memory (see docs/gpu-model-pending.md).
+# 2. Memory limits are set and match node capacity; increase limits if OOMKilled.
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: mistral
+  namespace: models
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  predictor:
+    model:
+      modelFormat:
+        name: huggingface
+      # storageUri / runtime: keep your existing value from gitops-catalog
+      resources:
+        requests:
+          cpu: "20"
+          memory: 80Gi
+          nvidia.com/gpu: "1"
+        limits:
+          cpu: "20"
+          memory: 80Gi
+          nvidia.com/gpu: "1"
