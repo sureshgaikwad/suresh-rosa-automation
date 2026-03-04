@@ -120,7 +120,7 @@ resource "time_sleep" "wait_10_seconds" {
   triggers = {
     oidc_config_id                         = rhcs_rosa_oidc_config.oidc_config.id
     oidc_endpoint_url                      = rhcs_rosa_oidc_config.oidc_config.oidc_endpoint_url
-    oidc_provider_url                      = aws_iam_openid_connect_provider.oidc_provider.url
+    oidc_provider_url                      = trimprefix(aws_iam_openid_connect_provider.oidc_provider.url, "https://")
     discover_doc_object                    = var.managed ? null : aws_s3_object.discover_doc_object[0].checksum_sha1
     s3_object                              = var.managed ? null : aws_s3_object.jwks_object[0].checksum_sha1
     policy_attached_to_bucket              = var.managed ? null : aws_s3_bucket_policy.allow_access_from_another_account[0].bucket
