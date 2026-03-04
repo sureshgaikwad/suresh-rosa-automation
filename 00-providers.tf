@@ -1,5 +1,5 @@
 ##############################################################
-# Terraform and Provider Configuration
+# Terraform Version Constraints
 ##############################################################
 
 terraform {
@@ -12,7 +12,7 @@ terraform {
     }
     rhcs = {
       source  = "terraform-redhat/rhcs"
-      version = "~> 1.6"
+      version = "~> 1.7"
     }
     null = {
       source  = "hashicorp/null"
@@ -22,13 +22,13 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.0"
     }
-    kubectl = {
-      source  = "gavinbunney/kubectl"
-      version = "~> 1.14"
-    }
     time = {
       source  = "hashicorp/time"
       version = "~> 0.9"
+    }
+    external = {
+      source  = "hashicorp/external"
+      version = "~> 2.0"
     }
   }
 }

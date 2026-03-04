@@ -1,0 +1,183 @@
+# =============================================================================
+# Terraform .gitignore
+# =============================================================================
+
+# =============================================================================
+# Terraform State Files (SENSITIVE - contain secrets and infrastructure state)
+# =============================================================================
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform.tfstate.lock.info
+
+# =============================================================================
+# Terraform Variables Files (SENSITIVE - may contain credentials)
+# =============================================================================
+terraform.tfvars
+*.tfvars
+!terraform.tfvars.example
+!*.tfvars.example
+
+# =============================================================================
+# Terraform Directory and Cache
+# =============================================================================
+.terraform/
+.terraform.lock.hcl
+**/.terraform/*
+
+# =============================================================================
+# Terraform Plan Files (may contain sensitive data)
+# =============================================================================
+*.tfplan
+tfplan
+*.plan
+suresh.plan
+
+# =============================================================================
+# Terraform Crash Logs
+# =============================================================================
+crash.log
+crash.*.log
+
+# =============================================================================
+# Override Files (local development overrides)
+# =============================================================================
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# =============================================================================
+# Credentials and Secrets
+# =============================================================================
+# AWS credentials
+.aws/
+aws-credentials
+credentials
+credentials.json
+
+# SSH keys
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.ppk
+
+# Certificates
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# Private keys and certificates (keep CA certs if needed)
+*-key.pem
+*-cert.pem
+*.priv
+
+# Generic secrets
+secrets.yaml
+secrets.yml
+secrets.json
+*secret*
+!*secret*.tf
+!*secret*.md
+
+# =============================================================================
+# Kubeconfig and OpenShift/Kubernetes
+# =============================================================================
+kubeconfig
+kubeconfig.*
+.kubeconfig
+*-kubeconfig
+*.kubeconfig
+
+# ROSA/OpenShift specific
+rosa-credentials
+ocm-token
+.ocm/
+
+# =============================================================================
+# Environment Files
+# =============================================================================
+.env
+.env.*
+!.env.example
+*.env
+
+# =============================================================================
+# IDE and Editor Files
+# =============================================================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains (IntelliJ, PyCharm, etc.)
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# =============================================================================
+# Logs and Temporary Files
+# =============================================================================
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.temp
+
+# =============================================================================
+# Generated Files
+# =============================================================================
+# Terraform docs output
+.terraform-docs/
+
+# Generated provider documentation
+docs/.gitkeep
+
+# =============================================================================
+# CI/CD Artifacts
+# =============================================================================
+.terragrunt-cache/
+.infracost/
+
+# =============================================================================
+# Backup Files
+# =============================================================================
+*.bak
+*.backup
+*~
+
+# =============================================================================
+# RHCS/OCM Token Files
+# =============================================================================
+.rhcs/
+.ocm/
+ocm.json
+rhcs.json
+
+# =============================================================================
+# Sensitive Output Files
+# =============================================================================
+/tmp/
+output.json
+cluster-info.json
+admin-credentials.txt

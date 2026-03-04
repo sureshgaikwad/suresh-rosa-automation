@@ -55,6 +55,10 @@ We recommend you install the following CLI tools:
 * [ROSA CLI](https://docs.openshift.com/rosa/cli_reference/rosa_cli/rosa-get-started-cli.html)
 * [Openshift CLI (oc)](https://docs.openshift.com/rosa/cli_reference/openshift_cli/getting-started-cli.html)
 
+## Terraform Destroy
+
+If `terraform destroy` fails with **VPC dependency** or **OIDC config in use** errors, the cluster is likely still deleting. Ensure `disable_waiting_in_destroy = false` and a sufficient `destroy_timeout` (e.g. 90 minutes), then run destroy again. If it still fails, wait 10–15 minutes and run `terraform destroy` again. See [docs/terraform-destroy-troubleshooting.md](docs/terraform-destroy-troubleshooting.md) for details.
+
 <!-- BEGIN_AUTOMATED_TF_DOCS_BLOCK -->
 ## Requirements
 
@@ -111,15 +115,20 @@ cp terraform.tfvars.example terraform.tfvars
 ```
 
 ### 3. Deploy
+
+**Option A – using Make:**
+```bash
+make init
+make plan
+make apply
+```
+
+**Option B – using Terraform directly:**
 ```bash
 terraform init
 terraform plan
 terraform apply
 ```
-
-## ✅ Works with Standard Terraform
-
-The configuration now works seamlessly with standard `terraform plan` and `terraform apply` commands - no custom scripts needed!
 
 ## 📊 View Results
 ```bash
@@ -130,17 +139,30 @@ terraform output cluster_console_url
 ## 🔧 Configuration Options
 
 - **New VPC**: Set `create_vpc = true` (default) - automatically creates both public and private subnets
-- **Existing VPC**: Set `create_vpc = false` and provide `aws_subnet_ids` (must include both public and private subnets)
+- **Existing VPC**: Set `create_vpc = false` and provide `aws_subnet_ids` (private-only for private clusters; public + private for public clusters)
 - **Machine Pools**: Set `create_additional_machine_pools = true`
 - **GitOps**: Set `deploy_openshift_gitops = true` (default)
+- **Zero egress / private clusters**: See the GitOps connectivity note below
 
 ## ⚠️ Important: Subnet Requirements
 
-ROSA HCP clusters require **both public and private subnets**:
-- **Public subnets**: For load balancers and internet access
-- **Private subnets**: For worker nodes and internal services
+ROSA HCP subnet selection depends on whether the cluster is **public** or **private** (controlled by `private_cluster` in your tfvars):
 
-When `create_vpc = true`, this is handled automatically. When using existing VPC, ensure you provide both types of subnets in `aws_subnet_ids`.
+- **Public cluster** (`private_cluster = false`): Both public and private subnets are passed to ROSA HCP. Public subnets are needed for load balancers and external ingress.
+- **Private cluster** (`private_cluster = true`): Only private subnets are passed. Passing public subnets to a private ROSA HCP cluster causes the error **"Only private subnets permitted"**.
+- **Zero egress** (`zero_egress = true`): Always private subnets only (the cluster is forced private, no public subnets exist).
+
+When `create_vpc = true`, this is handled automatically based on `private_cluster`. When using an existing VPC (`create_vpc = false`), provide the appropriate subnets in `aws_subnet_ids`.
+
+## ⚠️ Important: GitOps requires network access to the cluster API
+
+This repo installs/configures GitOps using `oc` via Terraform `null_resource` + `local-exec` (for example: `oc login`, `oc apply`).
+
+If your cluster API is **private** (common with `private_cluster = true` and/or `zero_egress = true`), running `terraform apply` from your laptop may fail during GitOps with errors like:
+
+- `dial tcp 10.x.x.x:443: i/o timeout`
+
+**Fix:** run Terraform from a network/location that can reach the cluster API (VPN/DirectConnect, or from inside the VPC using a bastion/SSM), then re-run apply.
 
 
 ## Inputs

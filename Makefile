@@ -1,8 +1,4 @@
 ######################
-# Define a variable for the Terraform examples directory
-TERRAFORM_DIR := examples/rosa-hcp-public-with-byo-vpc-byo-iam-byo-oidc
-
-######################
 # Log into your AWS account before running this make file.
 # Create .env file with your ROSA token. This file will be ignored by git.
 # format.
@@ -14,7 +10,57 @@ TF_LOG=INFO
 ######################
 # .EXPORT_ALL_VARIABLES:
 
-# Run make init \ make plan \ make apply \ make destroy
+##############################################################
+# Root-module targets
+##############################################################
+
+.PHONY: init plan apply destroy output format validate
+
+init:
+	terraform init
+
+plan: format validate
+	terraform plan
+
+apply:
+	terraform apply
+
+destroy:
+	terraform destroy
+
+output:
+	terraform output
+
+format:
+	terraform fmt
+
+validate:
+	terraform validate
+
+##############################################################
+# Upstream sync targets
+##############################################################
+
+.PHONY: upstream-status upstream-diff upstream-sync
+
+upstream-status:
+	@./scripts/sync-upstream.sh status
+
+upstream-diff:
+	@./scripts/sync-upstream.sh diff $(MODULE)
+
+upstream-sync:
+	@./scripts/sync-upstream.sh sync $(MODULE)
+
+upstream-sync-all:
+	@./scripts/sync-upstream.sh sync-all
+
+##############################################################
+# Example targets (examples/ subdirectory)
+##############################################################
+
+# Define a variable for the Terraform examples directory
+TERRAFORM_DIR := examples/rosa-hcp-public-with-byo-vpc-byo-iam-byo-oidc
 
 .PHONY: verify
 # This target is used by prow target (https://github.com/openshift/release/blob/77159f7696ed6c7bae518091079724cb8217dd33/ci-operator/config/terraform-redhat/terraform-rhcs-rosa/terraform-redhat-terraform-rhcs-rosa-main.yaml#L18)
@@ -32,7 +78,7 @@ tf-init:
 	@cd $(TERRAFORM_DIR) && terraform init -input=false -lock=false -no-color -reconfigure
 
 .PHONY: tf-plan
-tf-plan: format validate
+tf-plan: tf-format tf-validate
 	@cd $(TERRAFORM_DIR) && terraform plan -lock=false -out=.terraform-plan
 
 .PHONY: tf-apply

@@ -45,9 +45,11 @@ resource "rhcs_cluster_rosa_hcp" "rosa_hcp_cluster" {
   )
   cloud_region   = var.aws_region == null ? data.aws_region.current[0].name : var.aws_region
   aws_account_id = local.aws_account_id
-  aws_billing_account_id = var.aws_billing_account_id == null || var.aws_billing_account_id == "" ? (
-    local.aws_account_id
-  ) : (var.aws_billing_account_id)
+  aws_billing_account_id = (data.aws_partition.current.partition == "aws-us-gov" && var.aws_billing_account_id == null) ? null : (
+    var.aws_billing_account_id == null || var.aws_billing_account_id == "" ?
+    local.aws_account_id :
+    var.aws_billing_account_id
+  )
   sts  = local.sts_roles
   tags = var.tags
   availability_zones = length(var.aws_availability_zones) > 0 ? (
@@ -86,12 +88,14 @@ resource "rhcs_cluster_rosa_hcp" "rosa_hcp_cluster" {
   kms_key_arn                       = var.kms_key_arn
   shared_vpc                        = var.shared_vpc
   base_dns_domain                   = var.base_dns_domain
+  domain_prefix                     = var.domain_prefix
   aws_additional_allowed_principals = var.aws_additional_allowed_principals
 
   wait_for_create_complete            = var.wait_for_create_complete
   wait_for_std_compute_nodes_complete = var.wait_for_std_compute_nodes_complete
   disable_waiting_in_destroy          = var.disable_waiting_in_destroy
   destroy_timeout                     = var.destroy_timeout
+  registry_config                     = var.registry_config
 
   lifecycle {
     precondition {
@@ -137,6 +141,8 @@ resource "rhcs_hcp_cluster_autoscaler" "cluster_autoscaler" {
   }
 }
 
+# ROSA HCP requires a default ingress; the provider does not delete it on destroy
+# and removes it from state so the cluster can be deleted. No lifecycle needed.
 resource "rhcs_hcp_default_ingress" "default_ingress" {
   count   = rhcs_cluster_rosa_hcp.rosa_hcp_cluster.wait_for_create_complete ? 1 : 0
   cluster = rhcs_cluster_rosa_hcp.rosa_hcp_cluster.id
@@ -145,6 +151,8 @@ resource "rhcs_hcp_default_ingress" "default_ingress" {
     var.private ? "internal" : "external"
   )
 }
+
+data "aws_partition" "current" {}
 
 data "aws_caller_identity" "current" {
   count = var.aws_account_id == null || var.aws_account_arn == null ? 1 : 0

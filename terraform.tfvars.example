@@ -5,15 +5,12 @@
 # Required Variables
 ##############################################################
 cluster_name      = "my-rosa-cluster"
-openshift_version = "4.19.3"
+openshift_version = "4.17.0"
 aws_region        = "us-east-1"
 
-
-
 # AWS Account Configuration (optional - will auto-detect if not provided)
-# aws_account_id = "123456789012"           # AWS account where cluster will be deployed
-# aws_billing_account_id = "123456789012"   # AWS account for billing (defaults to aws_account_id)
-
+# aws_account_id         = "123456789012"  # AWS account where cluster will be deployed
+# aws_billing_account_id = "123456789012"  # AWS account for billing (defaults to aws_account_id)
 
 ##############################################################
 # VPC Configuration
@@ -22,23 +19,45 @@ create_vpc = true
 vpc_cidr   = "10.0.0.0/16"
 
 # If using existing VPC, set create_vpc = false and provide:
-# IMPORTANT: For ROSA HCP clusters, you need both public and private subnets
-# aws_subnet_ids         = ["subnet-public1", "subnet-public2", "subnet-public3", "subnet-private1", "subnet-private2", "subnet-private3"]
+# IMPORTANT: For private ROSA HCP clusters, provide PRIVATE subnet IDs only.
+# For public clusters, provide both public and private subnets.
+# aws_subnet_ids         = ["subnet-private1", "subnet-private2", "subnet-private3"]
 # aws_availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
-# machine_cidr          = "10.0.0.0/16"
-# replicas              = 3
+# machine_cidr           = "10.0.0.0/16"
+
+##############################################################
+# Zero Egress Configuration (Air-gapped / Disconnected Cluster)
+##############################################################
+# Enable zero egress for a fully private cluster with no internet access
+zero_egress                      = false
+zero_egress_vpc_endpoints        = true   # Create required AWS VPC endpoints
+zero_egress_additional_endpoints = []     # Additional endpoints: ["sqs", "sns", "kinesis"]
+
+# Note: When zero_egress = true:
+# - VPC will only have private subnets (no internet gateway)
+# - VPC endpoints will be created for: ec2, ecr.api, ecr.dkr, s3, sts, elasticloadbalancing, kms, logs, secretsmanager
+# - Cluster will be private with internal ingress
+# - Image mirroring may be required for disconnected operation
 
 ##############################################################
 # Admin User Configuration
 ##############################################################
 admin_username = "cluster-admin"
-# admin_password = "YourSecurePassword123!" # Optional, random password will be generated if not provided
+# admin_credentials_password = "YourSecurePassword123!" # Optional, random password will be generated if not provided
 
 ##############################################################
 # Cluster Configuration
 ##############################################################
 private_cluster      = false
 compute_machine_type = "m5.xlarge"
+replicas             = 3   # Number of worker nodes (must be multiple of AZ count for HCP)
+
+# Cluster Wait Configuration
+wait_for_create_complete            = true  # Wait for cluster API to be ready (20 min timeout)
+wait_for_std_compute_nodes_complete = true  # Wait for all compute nodes to be ready (60 min timeout)
+# Destroy: keep false so Terraform waits for the cluster to be fully deleted before removing VPC/OIDC
+disable_waiting_in_destroy = false   # Must be false for clean destroy (default)
+destroy_timeout            = 90     # Max minutes for cluster destroy (default 60); increase if destroy fails
 
 ##############################################################
 # Optional Network Configuration
@@ -58,32 +77,39 @@ autoscaling_max_replicas        = 10
 # Example additional machine pools configuration:
 # machine_pools = {
 #   "worker-pool-1" = {
-#     name          = "worker-pool-1"
-#     instance_type = "m5.2xlarge"
-#     replicas      = 3
-#     subnet_id     = "subnet-12345"
+#     name = "worker-pool-1"
+#     aws_node_pool = {
+#       instance_type = "m5.2xlarge"
+#       tags          = {}
+#     }
+#     replicas    = 3
+#     auto_repair = true
 #     labels = {
 #       "node-type" = "compute"
 #     }
-#     # Optional autoscaling configuration
-#     autoscaling = {
-#       min_replicas = 2
-#       max_replicas = 5
-#     }
+#     # Optional autoscaling configuration (replicas is ignored when autoscaling is set)
+#     # autoscaling = {
+#     #   min_replicas = 2
+#     #   max_replicas = 5
+#     # }
 #   }
 #   "gpu-pool" = {
-#     name          = "gpu-pool"
-#     instance_type = "g4dn.xlarge"
-#     replicas      = 2
-#     subnet_id     = "subnet-67890"
+#     name = "gpu-pool"
+#     aws_node_pool = {
+#       # Use g4dn.8xlarge or larger for AI model pods that request ~20 CPU + 80Gi (e.g. Mistral); g4dn.xlarge has only 4 CPU / 16Gi
+#       instance_type = "g4dn.8xlarge"
+#       tags          = {}
+#     }
+#     replicas    = 2
+#     auto_repair = true
 #     labels = {
 #       "node-type" = "gpu"
 #     }
 #     taints = [
 #       {
-#         key    = "gpu"
-#         value  = "true"
-#         effect = "NoSchedule"
+#         key           = "nvidia.com/gpu"
+#         value         = "true"
+#         schedule_type = "NoSchedule"
 #       }
 #     ]
 #   }
@@ -92,8 +118,8 @@ autoscaling_max_replicas        = 10
 ##############################################################
 # Bastion Host Configuration
 ##############################################################
-create_bastion_host    = false
-bastion_instance_type  = "t3.micro"
+create_bastion_host   = false
+bastion_instance_type = "t3.micro"
 # bastion_ssh_key_name = "my-key-pair"  # Required if create_bastion_host = true
 
 ##############################################################
@@ -104,24 +130,22 @@ create_identity_providers = false
 # Example identity providers configuration:
 # identity_providers = {
 #   "github-idp" = {
-#     name     = "github-corp"
-#     idp_type = "github"
+#     name                     = "github-corp"
+#     idp_type                 = "github"
 #     github_idp_client_id     = "your-github-client-id"
 #     github_idp_client_secret = "your-github-client-secret"
+#     # Native HCL types (preferred)
 #     github_idp_organizations = ["your-github-org"]
 #     mapping_method           = "claim"
 #   }
 #   "htpasswd-idp" = {
-#     name     = "local-users"
-#     idp_type = "htpasswd"
+#     name             = "local-users"
+#     idp_type         = "htpasswd"
+#     # Native HCL types (preferred)
 #     htpasswd_idp_users = [
 #       {
 #         username = "admin"
 #         password = "secure-password"
-#       },
-#       {
-#         username = "developer"
-#         password = "another-password"
 #       }
 #     ]
 #   }
@@ -132,10 +156,10 @@ create_identity_providers = false
 ##############################################################
 create_account_roles  = true
 create_operator_roles = true
-create_oidc          = true
-managed_oidc         = true
-create_ocm_role      = false
-# ocm_role_name      = "ManagedOpenShift-OCM-Role"
+create_oidc           = true
+managed_oidc          = true
+create_ocm_role       = false
+# ocm_role_name       = "ManagedOpenShift-OCM-Role"
 
 ##############################################################
 # Encryption Configuration
@@ -157,13 +181,18 @@ enable_proxy = false
 ##############################################################
 # Red Hat Cloud Services (RHCS) Authentication
 ##############################################################
-# Option 1: Provide credentials via variables (not recommended for production)
+# Option 1: Use RHCS Token (recommended for personal use)
+# rhcs_token = "eyJhbGc..." # Get from https://console.redhat.com/openshift/token
+
+# Option 2: Use Service Account credentials (recommended for automation)
 # rhcs_client_id     = "your-rhcs-client-id"
 # rhcs_client_secret = "your-rhcs-client-secret"
 
-# Option 2: Use environment variables (recommended)
-# export RHCS_CLIENT_ID="your-rhcs-client-id"
-# export RHCS_CLIENT_SECRET="your-rhcs-client-secret"
+# Option 3: Use environment variables (most secure)
+# export RHCS_TOKEN="your-token"
+# OR
+# export RHCS_CLIENT_ID="your-client-id"
+# export RHCS_CLIENT_SECRET="your-client-secret"
 
 # Optional: Custom OCM URL (default is production)
 # rhcs_url = "https://api.stage.openshift.com"  # For staging environment
@@ -172,26 +201,42 @@ enable_proxy = false
 # OpenShift GitOps Configuration
 ##############################################################
 deploy_openshift_gitops = true
-deploy_vote_application        = true
+deploy_vote_application = true
 gitops_repo_url         = "https://github.com/sureshgaikwad/gitops-catalog"
-application_repo_path        = "vote-application"
+application_repo_path   = "application/vote-application"
 
 ##############################################################
-# Operator Deployments
+# Operator Deployments (via ArgoCD)
 ##############################################################
-deploy_openshift_ai                      = false
-deploy_openshift_serverless             = false
-deploy_openshift_servicemesh            = false
-deploy_ai_model                         = false
-deploy_nfd                              = false
-deploy_nvidia_gpu_operator              = false
-deploy_openshift_lightspeed             = false
-deploy_authorino_operator               = false
-deploy_openshift_devspaces              = false
-deploy_openshift_virtualization         = false
-deploy_web_terminal                     = false
-deploy_advance_cluster_management       = false
 
+# AI/ML Operators
+deploy_openshift_ai                    = false
+deploy_ai_model                        = false
+deploy_openshift_lightspeed            = false
+
+# GPU/Hardware Operators
+deploy_nfd                             = false
+deploy_nfd_application                 = false
+deploy_nvidia_gpu_operator             = false
+deploy_nvidia_gpu_operator_application = false
+
+# Service Mesh & Serverless
+deploy_openshift_serverless            = false
+deploy_openshift_servicemesh           = false
+
+# Security & Auth
+deploy_authorino_operator              = false
+deploy_keycloak                        = false
+keycloak_wait_timeout                  = 600  # Increase (e.g. 900) if Keycloak pod starts slowly
+
+# Developer Tools
+deploy_developerhub                    = false
+deploy_openshift_devspaces             = false
+deploy_web_terminal                    = false
+
+# Infrastructure & Management
+deploy_openshift_virtualization        = false
+deploy_advance_cluster_management      = false
 
 ##############################################################
 # Tags
@@ -200,5 +245,4 @@ tags = {
   Environment = "development"
   Team        = "platform"
   Project     = "rosa-cluster"
-  Owned-by    = "sgaikwad"
 }

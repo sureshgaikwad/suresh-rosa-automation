@@ -163,6 +163,12 @@ variable "base_dns_domain" {
   description = "Base DNS domain name previously reserved, e.g. '1vo8.p3.openshiftapps.com'."
 }
 
+variable "domain_prefix" {
+  type        = string
+  default     = null
+  description = "Custom subdomain prefix for the cluster. This prefix becomes part of the cluster's subdomain on *.openshiftapps.com. Must be unique, cannot exceed 15 characters, and cannot be changed after cluster creation."
+}
+
 variable "shared_vpc" {
   type = object({
     ingress_private_hosted_zone_id                = string
@@ -335,4 +341,49 @@ variable "default_ingress_listening_method" {
   type        = string
   default     = ""
   description = "Listening Method for ingress. Options are [\"internal\", \"external\"]. Default is \"external\". When empty is set based on private variable."
+}
+
+##############################################################
+# Registry Configuration
+##############################################################
+variable "registry_config" {
+  type = object({
+    additional_trusted_ca = optional(map(string))
+    allowed_registries_for_import = optional(
+      list(
+        object(
+          {
+            domain_name = optional(string)
+            insecure    = optional(bool)
+          }
+        )
+      )
+    )
+    platform_allowlist_id = optional(string)
+    registry_sources = optional(
+      object(
+        {
+          allowed_registries  = optional(list(string))
+          blocked_registries  = optional(list(string))
+          insecure_registries = optional(list(string))
+        }
+      )
+    )
+  })
+  default     = null
+  description = "Registry configuration for this cluster."
+
+  validation {
+    condition = var.registry_config == null ? true : (
+      var.registry_config.registry_sources == null ? true : (
+        !(
+          can(var.registry_config.registry_sources.allowed_registries) &&
+          length(coalesce(var.registry_config.registry_sources.allowed_registries, [])) > 0 &&
+          can(var.registry_config.registry_sources.blocked_registries) &&
+          length(coalesce(var.registry_config.registry_sources.blocked_registries, [])) > 0
+        )
+      )
+    )
+    error_message = "Registry config cannot specify both allowed_registries and blocked_registries - they are mutually exclusive."
+  }
 }

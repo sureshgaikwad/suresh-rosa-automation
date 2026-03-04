@@ -6,6 +6,7 @@
 # If the model pod crashes (CrashLoopBackOff / OOMKilled), ensure:
 # 1. GPU node has enough CPU and memory (see docs/gpu-model-pending.md).
 # 2. Memory limits are set and match node capacity; increase limits if OOMKilled.
+# 3. On Tesla T4 (compute capability 7.5), use float16: add args: [--dtype=half] (see docs/model-crash-troubleshooting.md).
 ---
 apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
@@ -19,6 +20,9 @@ spec:
     model:
       modelFormat:
         name: huggingface
+      # Required for Tesla T4 (g4dn): bfloat16 needs compute capability 8.0+; use float16 instead
+      args:
+        - --dtype=half
       # storageUri / runtime: keep your existing value from gitops-catalog
       resources:
         requests:

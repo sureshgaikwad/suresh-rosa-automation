@@ -45,5 +45,6 @@ Summary of changes in the v2 manifest:
 **Fix:**
 
 1. **Set resource limits** in your model’s InferenceService so memory is capped and the pod can schedule on a node with enough capacity. Use the reference manifest in **manifests/ai-model-inferenceservice-example.yaml** and copy the `resources` block into your gitops-catalog repo at `ai-models/mistral/` (merge into your existing InferenceService).
-2. **Use a GPU node that fits the request** (e.g. **g4dn.8xlarge** for 20 CPU + 80Gi + 1 GPU). If the node is too small, see [GPU node and model pod stuck in Pending](../docs/gpu-model-pending.md).
-3. Full steps and alternatives: [Model crash troubleshooting](../docs/model-crash-troubleshooting.md).
+2. **On Tesla T4 (g4dn):** If you see `Bfloat16 is only supported on GPUs with compute capability of at least 8.0`, add `args: [--dtype=half]` to the predictor so the model uses float16 instead of bfloat16. The example manifest includes this.
+3. **Use a GPU node that fits the request** (e.g. **g4dn.8xlarge** for 20 CPU + 80Gi + 1 GPU). If the node is too small, see [GPU node and model pod stuck in Pending](../docs/gpu-model-pending.md).
+4. Full steps and alternatives: [Model crash troubleshooting](../docs/model-crash-troubleshooting.md).
