@@ -24,6 +24,45 @@ locals {
   cluster_machine_cidr       = var.zero_egress && var.create_vpc ? module.vpc[0].cidr_block : var.machine_cidr
   cluster_availability_zones = var.create_vpc ? module.vpc[0].availability_zones : var.aws_availability_zones
 
+  # Additional machine pool placement:
+  # pick a subnet in an AZ where the requested instance type is offered.
+  additional_machine_pool_instance_types = distinct([
+    for _, pool in var.machine_pools :
+    try(pool.aws_node_pool.instance_type, try(pool.instance_type, "m5.xlarge"))
+  ])
+
+  machine_pool_default_subnet_id = var.create_vpc ? module.vpc[0].private_subnets[0] : var.aws_subnet_ids[0]
+
+  provided_private_subnets_by_az = var.create_vpc ? {} : {
+    for subnet in data.aws_subnet.provided_subnet : subnet.availability_zone => subnet.id
+    if subnet.map_public_ip_on_launch == false
+  }
+
+  machine_pool_candidate_subnets_by_az = var.create_vpc ? module.vpc[0].private_subnets_by_az : (
+    length(local.provided_private_subnets_by_az) > 0 ? local.provided_private_subnets_by_az : {
+      for subnet in data.aws_subnet.provided_subnet : subnet.availability_zone => subnet.id
+    }
+  )
+
+  machine_pool_selected_subnet_ids = {
+    for pool_key, pool in var.machine_pools : pool_key => (
+      try(pool.subnet_id, null) != null ? pool.subnet_id : try(
+        local.machine_pool_candidate_subnets_by_az[
+          sort(tolist(setintersection(
+            toset(keys(local.machine_pool_candidate_subnets_by_az)),
+            toset(try(
+              data.aws_ec2_instance_type_offerings.machine_pool_instance_azs[
+                try(pool.aws_node_pool.instance_type, try(pool.instance_type, "m5.xlarge"))
+              ].locations,
+              []
+            ))
+          )))[0]
+        ],
+        local.machine_pool_default_subnet_id
+      )
+    )
+  }
+
   # Cluster outputs -- single module, no ternary needed
   cluster_id              = module.rosa_cluster_hcp[0].cluster_id
   cluster_api_url         = module.rosa_cluster_hcp[0].cluster_api_url

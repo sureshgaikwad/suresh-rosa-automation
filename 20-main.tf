@@ -136,6 +136,7 @@ module "rosa_cluster_hcp" {
   # Default Machine Pool
   replicas                                  = var.replicas
   compute_machine_type                      = var.compute_machine_type
+  worker_disk_size                          = var.worker_disk_size
   aws_availability_zones                    = local.cluster_availability_zones
   aws_additional_compute_security_group_ids = var.aws_additional_compute_security_group_ids
 
@@ -258,12 +259,10 @@ module "rhcs_hcp_machine_pool" {
     instance_type                 = try(each.value.aws_node_pool.instance_type, try(each.value.instance_type, "m5.xlarge"))
     tags                          = merge(var.tags, try(each.value.aws_node_pool.tags, try(each.value.tags, {})))
     additional_security_group_ids = try(each.value.aws_node_pool.additional_security_group_ids, try(each.value.additional_security_group_ids, null))
+    disk_size                     = try(each.value.aws_node_pool.disk_size, try(each.value.disk_size, null))
   }
 
-  subnet_id = coalesce(
-    each.value.subnet_id,
-    var.create_vpc ? module.vpc[0].private_subnets[0] : var.aws_subnet_ids[0]
-  )
+  subnet_id         = local.machine_pool_selected_subnet_ids[each.key]
   openshift_version = var.openshift_version
 
   tuning_configs               = try(each.value.tuning_configs, null)

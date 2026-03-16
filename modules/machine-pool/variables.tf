@@ -58,6 +58,7 @@ variable "aws_node_pool" {
     instance_type                 = string
     tags                          = map(string)
     additional_security_group_ids = optional(list(string))
+    disk_size                     = optional(number)
   })
   nullable    = false
   description = "Configures aws settings for the pool."

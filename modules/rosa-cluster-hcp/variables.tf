@@ -288,6 +288,13 @@ variable "compute_machine_type" {
   default     = null
   description = "Identifies the Instance type used by the default worker machine pool e.g. `m5.xlarge`. Use the `rhcs_machine_types` data source to find the possible values."
 }
+
+variable "worker_disk_size" {
+  type        = number
+  default     = null
+  description = "Default worker node root disk size, in GiB. Immutable after cluster creation. (default: 300 GiB when null)"
+}
+
 variable "aws_availability_zones" {
   type        = list(string)
   default     = []

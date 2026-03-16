@@ -44,6 +44,24 @@ variable "deploy_openshift_servicemesh" {
   description = "Deploy OpenShift Service Mesh operator via ArgoCD application"
 }
 
+variable "deploy_kueue_operator" {
+  type        = bool
+  default     = false
+  description = "Deploy Kueue operator via ArgoCD using gitops-catalog repository"
+}
+
+variable "deploy_jobset_operator" {
+  type        = bool
+  default     = false
+  description = "Deploy JobSet operator via ArgoCD using gitops-catalog repository"
+}
+
+variable "deploy_cert_manager_operator" {
+  type        = bool
+  default     = false
+  description = "Deploy cert-manager operator via ArgoCD using gitops-catalog repository"
+}
+
 variable "deploy_nfd_application" {
   type        = bool
   default     = false

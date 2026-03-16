@@ -17,6 +17,13 @@ output "private_subnets" {
   description = "List of private subnet IDs"
 }
 
+output "private_subnets_by_az" {
+  value = {
+    for idx, az in local.availability_zones : az => aws_subnet.private_subnet[idx].id
+  }
+  description = "Map of private subnet IDs keyed by availability zone"
+}
+
 output "public_subnets" {
   value       = var.zero_egress ? [] : sort(aws_subnet.public_subnet[*].id)
   description = "List of public subnet IDs (empty for zero-egress)"

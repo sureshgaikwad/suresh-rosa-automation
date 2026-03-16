@@ -11,9 +11,12 @@ locals {
   deploy_nvidia_gpu_operator             = var.deploy_openshift_ai ? true : var.deploy_nvidia_gpu_operator
   deploy_nfd_application                 = var.deploy_openshift_ai ? true : var.deploy_nfd_application
   deploy_nvidia_gpu_operator_application = var.deploy_openshift_ai ? true : var.deploy_nvidia_gpu_operator_application
-  deploy_openshift_servicemesh           = var.deploy_openshift_ai ? true : var.deploy_openshift_servicemesh
+  deploy_openshift_servicemesh           = var.deploy_openshift_servicemesh # RHOAI 3.x auto-installs Service Mesh 3 via OLM dependency
   deploy_openshift_serverless            = var.deploy_openshift_ai ? true : var.deploy_openshift_serverless
   deploy_openshift_lightspeed            = var.deploy_openshift_ai ? true : var.deploy_openshift_lightspeed
+  deploy_kueue_operator                  = var.deploy_openshift_ai ? true : var.deploy_kueue_operator
+  deploy_jobset_operator                 = var.deploy_openshift_ai ? true : var.deploy_jobset_operator
+  deploy_cert_manager_operator           = var.deploy_openshift_ai ? true : var.deploy_cert_manager_operator
 }
 
 ##############################################################
@@ -105,10 +108,40 @@ locals {
       dependency_weight = 2
     }
 
+    # cert-manager Operator (required by JobSet operator for webhook certificates)
+    cert-manager-operator = {
+      enabled           = local.deploy_cert_manager_operator && local.deploy_openshift_gitops
+      path              = "operators/cert-manager-operator"
+      namespace         = "cert-manager-operator"
+      repo_url          = "https://github.com/sureshgaikwad/gitops-catalog"
+      create_namespace  = true
+      dependency_weight = 1
+    }
+
+    # Kueue Operator (required by OpenShift AI for job queuing)
+    kueue-operator = {
+      enabled           = local.deploy_kueue_operator && local.deploy_openshift_gitops
+      path              = "operators/kueue-operator"
+      namespace         = "openshift-kueue-operator"
+      repo_url          = "https://github.com/sureshgaikwad/gitops-catalog"
+      create_namespace  = true
+      dependency_weight = 2
+    }
+
+    # JobSet Operator (required by OpenShift AI Trainer component)
+    jobset-operator = {
+      enabled           = local.deploy_jobset_operator && local.deploy_openshift_gitops
+      path              = "operators/jobset-operator"
+      namespace         = "openshift-jobset-operator"
+      repo_url          = "https://github.com/sureshgaikwad/gitops-catalog"
+      create_namespace  = true
+      dependency_weight = 2
+    }
+
     # AI Model
     ai-model = {
       enabled           = var.deploy_ai_model && local.deploy_openshift_gitops
-      path              = "ai-models/mistral"
+      path              = "ai-models/qwen"
       namespace         = "models"
       repo_url          = var.gitops_repo_url
       create_namespace  = true
