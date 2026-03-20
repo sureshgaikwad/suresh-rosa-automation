@@ -114,6 +114,49 @@ variable "deploy_developerhub" {
   description = "Deploy Red Hat Developer Hub operator and instance via ArgoCD using gitops-catalog repository"
 }
 
+variable "keycloak_bootstrap_user_enabled" {
+  type        = bool
+  default     = true
+  description = "Create/update a bootstrap Keycloak user for Developer Hub OIDC login."
+}
+
+variable "keycloak_bootstrap_username" {
+  type        = string
+  default     = "test"
+  description = "Bootstrap Keycloak username for Developer Hub login."
+}
+
+variable "keycloak_bootstrap_email" {
+  type        = string
+  default     = "test@gmail.com"
+  description = "Bootstrap Keycloak user email. Must match Backstage user entity email."
+}
+
+variable "keycloak_bootstrap_first_name" {
+  type        = string
+  default     = "Test"
+  description = "Bootstrap Keycloak user first name."
+}
+
+variable "keycloak_bootstrap_last_name" {
+  type        = string
+  default     = "User"
+  description = "Bootstrap Keycloak user last name."
+}
+
+variable "keycloak_bootstrap_password" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "Bootstrap Keycloak user password. If empty, Terraform generates one."
+}
+
+variable "keycloak_bootstrap_password_temporary" {
+  type        = bool
+  default     = false
+  description = "Whether bootstrap Keycloak user password is temporary."
+}
+
 variable "deploy_openshift_devspaces" {
   type        = bool
   default     = false
@@ -136,6 +179,18 @@ variable "deploy_advance_cluster_management" {
   type        = bool
   default     = false
   description = "Deploy Advanced Cluster Management (ACM) operator via ArgoCD"
+}
+
+variable "agentic_model_api_base" {
+  type        = string
+  default     = "http://qwen-25-7b-predictor.models.svc.cluster.local:8080/v1"
+  description = "OpenAI-compatible API base URL injected into Dev Spaces Continue config and Developer Hub proxy."
+}
+
+variable "agentic_model_id" {
+  type        = string
+  default     = "qwen-25-7b"
+  description = "Model identifier injected into agentic templates and Developer Hub proxy headers."
 }
 
 ##############################################################

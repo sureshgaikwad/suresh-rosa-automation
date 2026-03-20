@@ -12,9 +12,14 @@ resource "null_resource" "create_keycloak_oauth_client" {
   count = var.enabled ? 1 : 0
 
   triggers = {
-    cluster_id         = var.cluster_id
-    oidc_client_secret = var.oidc_client_secret
-    cluster_domain     = var.cluster_domain
+    cluster_id                   = var.cluster_id
+    oidc_client_secret           = var.oidc_client_secret
+    cluster_domain               = var.cluster_domain
+    create_bootstrap_user        = tostring(var.create_bootstrap_user)
+    bootstrap_username           = var.bootstrap_username
+    bootstrap_email              = var.bootstrap_email
+    bootstrap_password           = var.bootstrap_password
+    bootstrap_password_temporary = tostring(var.bootstrap_password_temporary)
   }
 
   provisioner "local-exec" {
@@ -224,6 +229,112 @@ resource "null_resource" "create_keycloak_oauth_client" {
         fi
       fi
       
+      if [ "${var.create_bootstrap_user}" = "true" ]; then
+        echo ""
+        echo "7. Creating/updating bootstrap user '${var.bootstrap_username}' in realm '${var.keycloak_realm}'..."
+        BOOTSTRAP_USERNAME="${var.bootstrap_username}"
+        BOOTSTRAP_EMAIL="${var.bootstrap_email}"
+        BOOTSTRAP_FIRST_NAME="${var.bootstrap_first_name}"
+        BOOTSTRAP_LAST_NAME="${var.bootstrap_last_name}"
+        BOOTSTRAP_PASSWORD="${var.bootstrap_password}"
+        BOOTSTRAP_PASSWORD_TEMPORARY="${var.bootstrap_password_temporary}"
+
+        if [ -z "$BOOTSTRAP_PASSWORD" ]; then
+          echo "ERROR: bootstrap_password is empty while create_bootstrap_user=true"
+          exit 1
+        fi
+
+        # Prefer username match, then fall back to email match to handle
+        # realms that enforce unique emails and already have a user record.
+        EXISTING_USER_ID=$(curl -k -s -X GET "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users?username=$BOOTSTRAP_USERNAME" \
+          -H "Authorization: Bearer $TOKEN" | jq -r '.[] | select(.username=="'"$BOOTSTRAP_USERNAME"'") | .id' | head -n1)
+        if [ -z "$EXISTING_USER_ID" ] && [ -n "$BOOTSTRAP_EMAIL" ]; then
+          EXISTING_USER_ID=$(curl -k -s -X GET "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users?email=$BOOTSTRAP_EMAIL" \
+            -H "Authorization: Bearer $TOKEN" | jq -r '.[] | select(.email=="'"$BOOTSTRAP_EMAIL"'") | .id' | head -n1)
+        fi
+
+        USER_PAYLOAD=$(jq -n \
+          --arg username "$BOOTSTRAP_USERNAME" \
+          --arg email "$BOOTSTRAP_EMAIL" \
+          --arg firstName "$BOOTSTRAP_FIRST_NAME" \
+          --arg lastName "$BOOTSTRAP_LAST_NAME" \
+          '{
+            username: $username,
+            email: $email,
+            firstName: $firstName,
+            lastName: $lastName,
+            enabled: true,
+            emailVerified: true
+          }')
+
+        if [ -z "$EXISTING_USER_ID" ]; then
+          HTTP_CODE=$(curl -k -s -w "%%{http_code}" -o /dev/null -X POST "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$USER_PAYLOAD")
+          if [ "$HTTP_CODE" = "409" ]; then
+            # Conflict usually means username or email already exists. Resolve by
+            # looking up existing user and updating it idempotently.
+            if [ -n "$BOOTSTRAP_EMAIL" ]; then
+              EXISTING_USER_ID=$(curl -k -s -X GET "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users?email=$BOOTSTRAP_EMAIL" \
+                -H "Authorization: Bearer $TOKEN" | jq -r '.[] | select(.email=="'"$BOOTSTRAP_EMAIL"'") | .id' | head -n1)
+            fi
+            if [ -z "$EXISTING_USER_ID" ]; then
+              EXISTING_USER_ID=$(curl -k -s -X GET "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users?username=$BOOTSTRAP_USERNAME" \
+                -H "Authorization: Bearer $TOKEN" | jq -r '.[] | select(.username=="'"$BOOTSTRAP_USERNAME"'") | .id' | head -n1)
+            fi
+            if [ -z "$EXISTING_USER_ID" ]; then
+              echo "ERROR: Bootstrap user conflict detected (HTTP 409), but existing user could not be resolved"
+              exit 1
+            fi
+            HTTP_CODE=$(curl -k -s -w "%%{http_code}" -o /dev/null -X PUT "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users/$EXISTING_USER_ID" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$USER_PAYLOAD")
+            if [ "$HTTP_CODE" != "204" ] && [ "$HTTP_CODE" != "200" ]; then
+              echo "ERROR: Failed to update existing bootstrap user after conflict (HTTP $HTTP_CODE)"
+              exit 1
+            fi
+            echo "   ✓ Bootstrap user conflict resolved by updating existing user"
+          elif [ "$HTTP_CODE" != "201" ]; then
+            echo "ERROR: Failed to create bootstrap user (HTTP $HTTP_CODE)"
+            exit 1
+          else
+            EXISTING_USER_ID=$(curl -k -s -X GET "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users?username=$BOOTSTRAP_USERNAME" \
+              -H "Authorization: Bearer $TOKEN" | jq -r '.[] | select(.username=="'"$BOOTSTRAP_USERNAME"'") | .id' | head -n1)
+            echo "   ✓ Bootstrap user created"
+          fi
+        else
+          HTTP_CODE=$(curl -k -s -w "%%{http_code}" -o /dev/null -X PUT "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users/$EXISTING_USER_ID" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$USER_PAYLOAD")
+          if [ "$HTTP_CODE" != "204" ] && [ "$HTTP_CODE" != "200" ]; then
+            echo "ERROR: Failed to update bootstrap user (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+          echo "   ✓ Bootstrap user updated"
+        fi
+
+        PASSWORD_PAYLOAD=$(jq -n \
+          --arg value "$BOOTSTRAP_PASSWORD" \
+          --argjson temporary "$BOOTSTRAP_PASSWORD_TEMPORARY" \
+          '{
+            type: "password",
+            value: $value,
+            temporary: $temporary
+          }')
+        HTTP_CODE=$(curl -k -s -w "%%{http_code}" -o /dev/null -X PUT "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users/$EXISTING_USER_ID/reset-password" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$PASSWORD_PAYLOAD")
+        if [ "$HTTP_CODE" != "204" ] && [ "$HTTP_CODE" != "200" ]; then
+          echo "ERROR: Failed to set bootstrap user password (HTTP $HTTP_CODE)"
+          exit 1
+        fi
+        echo "   ✓ Bootstrap user password configured"
+      fi
+
       rm -f $KUBECONFIG
       
       echo ""

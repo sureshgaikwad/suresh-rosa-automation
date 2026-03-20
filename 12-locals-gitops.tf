@@ -158,10 +158,10 @@ locals {
       dependency_weight = 2
     }
 
-    # Developer Hub Operator (use base/ path; root kustomization references files under base/)
+    # Developer Hub Operator (use root path to honor kustomization and exclude generated secrets/configmaps)
     developer-hub-operator = {
       enabled           = var.deploy_developerhub && local.deploy_openshift_gitops
-      path              = "operators/developer-hub/base"
+      path              = "operators/developer-hub"
       namespace         = "demo-project"
       repo_url          = "https://github.com/sureshgaikwad/gitops-catalog"
       create_namespace  = true

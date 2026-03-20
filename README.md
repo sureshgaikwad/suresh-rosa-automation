@@ -59,6 +59,17 @@ We recommend you install the following CLI tools:
 
 If `terraform destroy` fails with **VPC dependency** or **OIDC config in use** errors, the cluster is likely still deleting. Ensure `disable_waiting_in_destroy = false` and a sufficient `destroy_timeout` (e.g. 90 minutes), then run destroy again. If it still fails, wait 10–15 minutes and run `terraform destroy` again. See [docs/terraform-destroy-troubleshooting.md](docs/terraform-destroy-troubleshooting.md) for details.
 
+## Agentic Dev Platform Package
+
+This repository now includes an implementation package for a browser IDE based
+agentic developer experience with Developer Hub, Dev Spaces, Keycloak, and
+OpenShift AI model endpoints.
+
+- Implementation guide: `docs/agentic-dev-platform/README.md`
+- Pilot KPI checklist: `docs/agentic-dev-platform/pilot-kpis.md`
+- GitOps/identity/model/workspace assets: `assets/agentic-dev-platform/`
+- Operational scripts: `scripts/argocd-sync-control.sh`, `scripts/check-model-endpoint.sh`, `scripts/gitops-reconcile-agentic-stack.sh`
+
 <!-- BEGIN_AUTOMATED_TF_DOCS_BLOCK -->
 ## Requirements
 

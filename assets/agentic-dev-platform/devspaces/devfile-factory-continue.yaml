@@ -1,0 +1,57 @@
+schemaVersion: 2.2.0
+metadata:
+  name: ai-assisted-workspace
+components:
+  - name: tools
+    attributes:
+      che-code.eclipse.org/vscode-extensions:
+        - https://open-vsx.org/api/Continue/continue/latest/file/Continue.continue.vsix
+    container:
+      image: registry.redhat.io/devspaces/udi-rhel9:latest
+      memoryLimit: 4Gi
+      cpuLimit: "2"
+      mountSources: true
+commands:
+  - id: bootstrap-ai-config
+    exec:
+      component: tools
+      commandLine: |
+        set -e
+        mkdir -p ~/.continue
+        cat > ~/.continue/config.json <<'EOF'
+        {
+          "models": [
+            {
+              "title": "Qwen-25-7B-InCluster",
+              "provider": "openai",
+              "model": "{{OPENAI_MODEL_ID}}",
+              "apiBase": "{{OPENAI_API_BASE}}",
+              "apiKey": ""
+            }
+          ],
+          "tabAutocompleteModel": {
+            "title": "Qwen-25-7B-InCluster",
+            "provider": "openai",
+            "model": "{{OPENAI_MODEL_ID}}",
+            "apiBase": "{{OPENAI_API_BASE}}",
+            "apiKey": ""
+          },
+          "embeddingsProvider": {
+            "provider": "transformers.js"
+          },
+          "contextProviders": [
+            { "name": "codebase" },
+            { "name": "file" },
+            { "name": "diff" },
+            { "name": "terminal" }
+          ]
+        }
+        EOF
+        ROOT_DIR="$(find /projects -mindepth 1 -maxdepth 1 -type d | head -n 1 || true)"
+        if [ -n "${ROOT_DIR}" ]; then
+          mkdir -p "${ROOT_DIR}/.continue"
+          cp ~/.continue/config.json "${ROOT_DIR}/.continue/config.json"
+        fi
+events:
+  postStart:
+    - bootstrap-ai-config

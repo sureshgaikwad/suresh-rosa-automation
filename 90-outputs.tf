@@ -281,3 +281,19 @@ output "session_secret" {
   sensitive   = true
   description = "Session secret for Developer Hub"
 }
+
+output "keycloak_bootstrap_username" {
+  value       = var.deploy_keycloak && var.deploy_developerhub && var.keycloak_bootstrap_user_enabled ? var.keycloak_bootstrap_username : null
+  description = "Bootstrap Keycloak username for Developer Hub login"
+}
+
+output "keycloak_bootstrap_email" {
+  value       = var.deploy_keycloak && var.deploy_developerhub && var.keycloak_bootstrap_user_enabled ? var.keycloak_bootstrap_email : null
+  description = "Bootstrap Keycloak user email for Developer Hub login"
+}
+
+output "keycloak_bootstrap_password" {
+  value       = var.deploy_keycloak && var.deploy_developerhub && var.keycloak_bootstrap_user_enabled ? (var.keycloak_bootstrap_password != "" ? var.keycloak_bootstrap_password : random_password.keycloak_bootstrap_password[0].result) : null
+  sensitive   = true
+  description = "Bootstrap Keycloak user password for Developer Hub login"
+}

@@ -106,3 +106,50 @@ variable "realm_wait_timeout" {
   default     = 600
   description = "Maximum time to wait for the realm to be created (seconds)"
 }
+
+################################################################################
+# Bootstrap User Configuration
+################################################################################
+
+variable "create_bootstrap_user" {
+  type        = bool
+  default     = true
+  description = "Create or update a bootstrap user in Keycloak realm for Developer Hub sign-in."
+}
+
+variable "bootstrap_username" {
+  type        = string
+  default     = "test"
+  description = "Bootstrap Keycloak username for Developer Hub sign-in."
+}
+
+variable "bootstrap_email" {
+  type        = string
+  default     = "test@gmail.com"
+  description = "Bootstrap Keycloak user email. Must match Backstage user entity email."
+}
+
+variable "bootstrap_first_name" {
+  type        = string
+  default     = "Test"
+  description = "Bootstrap Keycloak user first name."
+}
+
+variable "bootstrap_last_name" {
+  type        = string
+  default     = "User"
+  description = "Bootstrap Keycloak user last name."
+}
+
+variable "bootstrap_password" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "Password for bootstrap Keycloak user."
+}
+
+variable "bootstrap_password_temporary" {
+  type        = bool
+  default     = true
+  description = "Whether the bootstrap user password is temporary."
+}

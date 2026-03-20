@@ -1,0 +1,69 @@
+{
+  "realm": "platform",
+  "enabled": true,
+  "displayName": "Agentic Dev Platform",
+  "groups": [
+    {
+      "name": "platform-admin"
+    },
+    {
+      "name": "appdev"
+    },
+    {
+      "name": "read-only"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "developer-hub",
+      "name": "Developer Hub",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "https://backstage-developer-hub-demo-project.{{CLUSTER_DOMAIN}}/api/auth/oidc/handler/frame",
+        "https://backstage-developer-hub-demo-project.{{CLUSTER_DOMAIN}}/*"
+      ],
+      "webOrigins": [
+        "https://backstage-developer-hub-demo-project.{{CLUSTER_DOMAIN}}"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "https://backstage-developer-hub-demo-project.{{CLUSTER_DOMAIN}}/*"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "groups"
+      ]
+    },
+    {
+      "clientId": "devspaces",
+      "name": "OpenShift Dev Spaces",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": true,
+      "redirectUris": [
+        "https://devspaces.{{CLUSTER_DOMAIN}}/*",
+        "https://devspaces.{{CLUSTER_DOMAIN}}/oauth/callback"
+      ],
+      "webOrigins": [
+        "https://devspaces.{{CLUSTER_DOMAIN}}"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "https://devspaces.{{CLUSTER_DOMAIN}}/*"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "groups"
+      ]
+    }
+  ]
+}

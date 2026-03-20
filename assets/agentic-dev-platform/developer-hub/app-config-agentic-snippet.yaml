@@ -1,0 +1,7 @@
+proxy:
+  endpoints:
+    "/openshift-ai":
+      target: "{{OPENAI_API_TARGET}}"
+      changeOrigin: true
+      headers:
+        X-Model-Id: "{{OPENAI_MODEL_ID}}"

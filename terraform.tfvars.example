@@ -231,6 +231,12 @@ keycloak_wait_timeout                  = 600  # Increase (e.g. 900) if Keycloak 
 
 # Developer Tools
 deploy_developerhub                    = false
+# Keycloak bootstrap user for Developer Hub OIDC
+keycloak_bootstrap_user_enabled        = true
+keycloak_bootstrap_username            = "test"
+keycloak_bootstrap_email               = "test@gmail.com"  # Must match gitops-catalog user-entities
+# keycloak_bootstrap_password          = ""                # Optional. If empty, Terraform generates one.
+keycloak_bootstrap_password_temporary  = false
 deploy_openshift_devspaces             = false
 deploy_web_terminal                    = false
 

@@ -387,12 +387,22 @@ module "argocd_applications" {
 module "gitops_template_processor" {
   source = "./modules/gitops-template-processor"
 
-  enabled                        = (var.deploy_keycloak || var.deploy_developerhub) && local.deploy_openshift_gitops
-  cluster_id                     = local.cluster_id
-  cluster_api_url                = local.cluster_api_url
-  cluster_admin_username         = local.cluster_admin_username
-  cluster_admin_password         = local.cluster_admin_password
-  process_developerhub_templates = var.deploy_developerhub
+  enabled                         = (var.deploy_keycloak || var.deploy_developerhub) && local.deploy_openshift_gitops
+  cluster_id                      = local.cluster_id
+  cluster_api_url                 = local.cluster_api_url
+  cluster_admin_username          = local.cluster_admin_username
+  cluster_admin_password          = local.cluster_admin_password
+  process_developerhub_templates  = var.deploy_developerhub
+  app_config_template_path        = var.deploy_developerhub ? "${path.module}/../gitops-catalog/operators/developer-hub/base/app-config.yaml.template" : ""
+  auth_secret_template_path       = var.deploy_developerhub ? "${path.module}/../gitops-catalog/operators/developer-hub/base/auth-secret.yaml.template" : ""
+  process_agentic_templates       = var.deploy_developerhub
+  agentic_template_path           = var.deploy_developerhub ? "${path.module}/assets/agentic-dev-platform/developer-hub/template-ostoy-ai-starter.yaml" : ""
+  agentic_devfile_path            = var.deploy_developerhub ? "${path.module}/assets/agentic-dev-platform/devspaces/devfile-factory-continue.yaml" : ""
+  agentic_app_config_snippet_path = var.deploy_developerhub ? "${path.module}/assets/agentic-dev-platform/developer-hub/app-config-agentic-snippet.yaml" : ""
+  model_api_base                  = var.agentic_model_api_base
+  model_id                        = var.agentic_model_id
+  oidc_client_secret              = var.deploy_keycloak && var.deploy_developerhub ? random_password.oidc_client_secret[0].result : ""
+  session_secret                  = var.deploy_developerhub ? random_password.session_secret[0].result : ""
 
   depends_on = [module.openshift_gitops]
 }
@@ -438,21 +448,35 @@ data "external" "cluster_domain" {
 module "keycloak_oauth" {
   source = "./modules/keycloak-oauth"
 
-  enabled                = var.deploy_keycloak && var.deploy_developerhub
-  cluster_id             = local.cluster_id
-  cluster_api_url        = local.cluster_api_url
-  cluster_admin_username = local.cluster_admin_username
-  cluster_admin_password = local.cluster_admin_password
-  cluster_domain         = local.oauth_cluster_domain
-  oidc_client_secret     = var.deploy_keycloak && var.deploy_developerhub ? random_password.oidc_client_secret[0].result : ""
-  redirect_uris          = local.devhub_redirect_uris
-  web_origins            = local.devhub_web_origins
-  keycloak_namespace     = "rhbk"
-  keycloak_route_name    = "keycloak"
-  keycloak_wait_timeout  = var.keycloak_wait_timeout
+  enabled                      = var.deploy_keycloak && var.deploy_developerhub
+  cluster_id                   = local.cluster_id
+  cluster_api_url              = local.cluster_api_url
+  cluster_admin_username       = local.cluster_admin_username
+  cluster_admin_password       = local.cluster_admin_password
+  cluster_domain               = local.oauth_cluster_domain
+  oidc_client_secret           = var.deploy_keycloak && var.deploy_developerhub ? random_password.oidc_client_secret[0].result : ""
+  redirect_uris                = local.devhub_redirect_uris
+  web_origins                  = local.devhub_web_origins
+  keycloak_namespace           = "rhbk"
+  keycloak_route_name          = "keycloak"
+  keycloak_wait_timeout        = var.keycloak_wait_timeout
+  create_bootstrap_user        = var.keycloak_bootstrap_user_enabled
+  bootstrap_username           = var.keycloak_bootstrap_username
+  bootstrap_email              = var.keycloak_bootstrap_email
+  bootstrap_first_name         = var.keycloak_bootstrap_first_name
+  bootstrap_last_name          = var.keycloak_bootstrap_last_name
+  bootstrap_password           = var.keycloak_bootstrap_password != "" ? var.keycloak_bootstrap_password : (var.deploy_keycloak && var.deploy_developerhub && var.keycloak_bootstrap_user_enabled ? random_password.keycloak_bootstrap_password[0].result : "")
+  bootstrap_password_temporary = var.keycloak_bootstrap_password_temporary
 
   depends_on = [
     module.gitops_template_processor,
     module.argocd_applications
   ]
+}
+
+resource "random_password" "keycloak_bootstrap_password" {
+  count = var.deploy_keycloak && var.deploy_developerhub && var.keycloak_bootstrap_user_enabled && var.keycloak_bootstrap_password == "" ? 1 : 0
+
+  length  = 24
+  special = false
 }

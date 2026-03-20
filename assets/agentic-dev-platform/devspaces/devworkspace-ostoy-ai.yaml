@@ -1,0 +1,118 @@
+apiVersion: workspace.devfile.io/v1alpha2
+kind: DevWorkspaceTemplate
+metadata:
+  name: ostoy-ai-template
+  namespace: openshift-devspaces
+  labels:
+    app.kubernetes.io/part-of: agentic-dev-platform
+spec:
+  projects:
+    - name: ostoy
+      git:
+        remotes:
+          origin: https://github.com/sureshgaikwad/ostoy
+  components:
+    - name: tools
+      container:
+        image: registry.redhat.io/devspaces/udi-rhel9:latest
+        memoryLimit: 4Gi
+        cpuLimit: "2"
+        mountSources: true
+        endpoints:
+          - name: app
+            targetPort: 8080
+    - name: continue-extension
+      plugin:
+        id: Continue.continue
+    - name: persist-home
+      volume:
+        size: 2Gi
+  commands:
+    - id: bootstrap-ai-config
+      exec:
+        component: tools
+        commandLine: |
+          mkdir -p ~/.continue
+          mkdir -p ${PROJECT_SOURCE}/ostoy/.continue
+          cat > ~/.continue/config.json <<'EOF'
+          {
+            "models": [
+              {
+                "title": "Qwen-25-7B-InCluster",
+                "provider": "openai",
+                  "model": "{{OPENAI_MODEL_ID}}",
+                  "apiBase": "{{OPENAI_API_BASE}}",
+                "apiKey": ""
+              }
+            ],
+            "tabAutocompleteModel": {
+              "title": "Qwen-25-7B-InCluster",
+              "provider": "openai",
+                "model": "{{OPENAI_MODEL_ID}}",
+                "apiBase": "{{OPENAI_API_BASE}}",
+              "apiKey": ""
+            },
+            "embeddingsProvider": {
+              "provider": "transformers.js"
+            },
+            "contextProviders": [
+              { "name": "codebase" },
+              { "name": "file" },
+              { "name": "diff" },
+              { "name": "terminal" }
+            ]
+          }
+          EOF
+          cp ~/.continue/config.json ${PROJECT_SOURCE}/ostoy/.continue/config.json
+          cat > ${PROJECT_SOURCE}/ostoy/.continue/AGENT_NOTES.md <<'EOF'
+          # Continue agent reliability notes
+          - Open workspace at repository root: `${PROJECT_SOURCE}/ostoy`
+          - Run `Continue: Rebuild Codebase Index` after startup
+          - Prefer prompts with `@codebase` for multi-file edits
+          EOF
+          npm config set fund false
+    - id: repo-context-check
+      exec:
+        component: tools
+        commandLine: |
+          cd ${PROJECT_SOURCE}/ostoy
+          git rev-parse --show-toplevel
+          ls -la
+    - id: model-smoke-test
+      exec:
+        component: tools
+        commandLine: |
+          curl -sS "{{OPENAI_API_BASE}}/models" | jq .
+    - id: install-deps
+      exec:
+        component: tools
+        workingDir: ${PROJECT_SOURCE}/ostoy
+        commandLine: npm install
+    - id: index-hint
+      exec:
+        component: tools
+        commandLine: |
+          echo "Run 'Continue: Rebuild Codebase Index' in the editor after startup."
+    - id: run-app
+      exec:
+        component: tools
+        workingDir: ${PROJECT_SOURCE}/ostoy
+        commandLine: npm start
+  events:
+    postStart:
+      - bootstrap-ai-config
+      - model-smoke-test
+      - install-deps
+      - repo-context-check
+      - index-hint
+---
+apiVersion: workspace.devfile.io/v1alpha2
+kind: DevWorkspace
+metadata:
+  name: ostoy-ai-dev
+  namespace: openshift-devspaces
+  labels:
+    app.kubernetes.io/part-of: agentic-dev-platform
+spec:
+  templateRef: ostoy-ai-template
+  started: true

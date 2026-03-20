@@ -1,0 +1,89 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: ostoy-ai-starter
+  title: OSToy AI-Assisted Starter
+  description: Bootstrap an OSToy-based project with Dev Spaces and OpenShift AI defaults.
+  tags:
+    - openshift
+    - devspaces
+    - ai
+spec:
+  owner: platform-team
+  type: service
+  parameters:
+    - title: Project metadata
+      required:
+        - name
+        - owner
+        - repoUrl
+      properties:
+        name:
+          title: Component name
+          type: string
+          description: Repository and component name.
+          pattern: "^[a-z0-9-]+$"
+        owner:
+          title: Owner group
+          type: string
+          description: Catalog group, for example group:default/appdev.
+        repoUrl:
+          title: Repository location
+          type: string
+          description: Git repository where the scaffolded content is pushed.
+          default: github.com?repo=ostoy-ai-starter&owner=sureshgaikwad
+    - title: Git credentials
+      required:
+        - githubToken
+      properties:
+        githubToken:
+          title: GitHub token
+          type: string
+          description: Personal access token with permissions to create/push repositories.
+          ui:field: Secret
+  steps:
+    - id: fetch-base
+      name: Fetch OSToy base
+      action: fetch:plain
+      input:
+        url: https://github.com/sureshgaikwad/ostoy/tree/master
+    - id: add-devspaces-devfile
+      name: Add Dev Spaces devfile
+      action: fetch:plain:file
+      input:
+        url: ./devfile-factory-continue.yaml
+        targetPath: ./devfile.yaml
+    - id: write-catalog-info
+      name: Create catalog descriptor
+      action: catalog:write
+      input:
+        filePath: catalog-info.yaml
+        entity:
+          apiVersion: backstage.io/v1alpha1
+          kind: Component
+          metadata:
+            name: ${{ parameters.name }}
+            description: AI-assisted OSToy starter service
+          spec:
+            type: service
+            lifecycle: development
+            owner: ${{ parameters.owner }}
+    - id: publish
+      name: Publish repository
+      action: publish:github
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        token: ${{ secrets.githubToken }}
+        repoVisibility: public
+        defaultBranch: main
+        description: AI-assisted OSToy starter
+  output:
+    links:
+      - title: Source Repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Catalog Descriptor
+        url: ${{ steps.publish.output.remoteUrl }}/blob/main/catalog-info.yaml
+      - title: Open In Dev Spaces
+        url: "{{DEVSPACES_BASE_URL}}/#${{ steps.publish.output.remoteUrl }}"
+      - title: ArgoCD Applications
+        url: "{{ARGOCD_APPLICATIONS_URL}}"
