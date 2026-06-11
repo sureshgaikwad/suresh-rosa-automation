@@ -62,6 +62,22 @@ resource "null_resource" "process_gitops_templates" {
         oc --kubeconfig=$KUBECONFIG get namespace "$DEVHUB_NS" >/dev/null 2>&1 || \
           oc --kubeconfig=$KUBECONFIG create namespace "$DEVHUB_NS"
 
+        # Mitigate ArgoCD deadlock with WaitForFirstConsumer PVC:
+        # the app can wait on PVC health before Backstage pod exists.
+        # If/when the PVC appears, mark it SkipWait so sync can progress.
+        MAX_PVC_WAIT=600
+        PVC_WAIT_ELAPSED=0
+        while [ $PVC_WAIT_ELAPSED -lt $MAX_PVC_WAIT ]; do
+          if oc --kubeconfig=$KUBECONFIG -n "$DEVHUB_NS" get pvc dynamic-plugins-root >/dev/null 2>&1; then
+            oc --kubeconfig=$KUBECONFIG -n "$DEVHUB_NS" annotate pvc dynamic-plugins-root \
+              argocd.argoproj.io/sync-options=SkipWait=true --overwrite >/dev/null 2>&1 || true
+            echo "   + Annotated pvc/dynamic-plugins-root with ArgoCD SkipWait=true"
+            break
+          fi
+          sleep 10
+          PVC_WAIT_ELAPSED=$((PVC_WAIT_ELAPSED + 10))
+        done
+
         # Create/update a ConfigMap with the cluster domain so Developer Hub
         # can reference it without needing pre-processed templates in git.
         oc --kubeconfig=$KUBECONFIG apply -f - <<YAML
@@ -173,8 +189,11 @@ with open(src, "r", encoding="utf-8") as f:
     content = f.read()
 for key, val in replacements.items():
     content = content.replace(key, val)
-if "{{" in content or "}}" in content:
-    raise SystemExit(f"Unresolved placeholder found after rendering: {src}")
+# Only fail for placeholders this renderer is responsible for.
+# Backstage scaffolder expressions are valid and must remain intact.
+for placeholder in replacements.keys():
+    if placeholder in content:
+        raise SystemExit(f"Unresolved placeholder found after rendering: {src} ({placeholder})")
 with open(dst, "w", encoding="utf-8") as f:
     f.write(content)
 PY
@@ -214,8 +233,23 @@ PY
           fi
 
           # Ensure Backstage CR consumes the rendered ConfigMaps.
-          oc --kubeconfig=$KUBECONFIG -n "$DEVHUB_NS" get backstage developer-hub -o json > /tmp/backstage-agentic.json
-          python3 - <<'PY'
+          # On fresh clusters, the CR may not exist yet while Argo CD sync is still progressing.
+          MAX_BACKSTAGE_WAIT=600
+          BACKSTAGE_WAIT_ELAPSED=0
+          BACKSTAGE_READY=false
+          while [ $BACKSTAGE_WAIT_ELAPSED -lt $MAX_BACKSTAGE_WAIT ]; do
+            if oc --kubeconfig=$KUBECONFIG -n "$DEVHUB_NS" get backstage developer-hub >/dev/null 2>&1; then
+              BACKSTAGE_READY=true
+              break
+            fi
+            echo "   Waiting for Backstage CR 'developer-hub' in namespace '$DEVHUB_NS'... ($BACKSTAGE_WAIT_ELAPSED/$MAX_BACKSTAGE_WAIT seconds)"
+            sleep 10
+            BACKSTAGE_WAIT_ELAPSED=$((BACKSTAGE_WAIT_ELAPSED + 10))
+          done
+
+          if [ "$BACKSTAGE_READY" = "true" ]; then
+            oc --kubeconfig=$KUBECONFIG -n "$DEVHUB_NS" get backstage developer-hub -o json > /tmp/backstage-agentic.json
+            python3 - <<'PY'
 import json
 from pathlib import Path
 p = Path("/tmp/backstage-agentic.json")
@@ -237,8 +271,12 @@ for entry in wanted:
         extra_maps.append(entry)
 Path("/tmp/backstage-agentic.patched.json").write_text(json.dumps(obj))
 PY
-          oc --kubeconfig=$KUBECONFIG apply -f /tmp/backstage-agentic.patched.json
-          echo "   + Agentic template/devfile/snippet applied and Backstage CR patched"
+            oc --kubeconfig=$KUBECONFIG apply -f /tmp/backstage-agentic.patched.json
+            echo "   + Agentic template/devfile/snippet applied and Backstage CR patched"
+          else
+            echo "   ! Backstage CR 'developer-hub' not available after $${MAX_BACKSTAGE_WAIT}s; skipping patch for now"
+            echo "   ! Re-run terraform apply after Developer Hub sync completes to apply agentic Backstage patch"
+          fi
         fi
       fi
 

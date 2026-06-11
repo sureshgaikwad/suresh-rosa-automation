@@ -253,7 +253,7 @@ resource "null_resource" "create_keycloak_oauth_client" {
             -H "Authorization: Bearer $TOKEN" | jq -r '.[] | select(.email=="'"$BOOTSTRAP_EMAIL"'") | .id' | head -n1)
         fi
 
-        USER_PAYLOAD=$(jq -n \
+        CREATE_USER_PAYLOAD=$(jq -n \
           --arg username "$BOOTSTRAP_USERNAME" \
           --arg email "$BOOTSTRAP_EMAIL" \
           --arg firstName "$BOOTSTRAP_FIRST_NAME" \
@@ -267,11 +267,25 @@ resource "null_resource" "create_keycloak_oauth_client" {
             emailVerified: true
           }')
 
+        # For existing users, avoid updating username because many Keycloak setups
+        # treat it as immutable after creation.
+        UPDATE_USER_PAYLOAD=$(jq -n \
+          --arg email "$BOOTSTRAP_EMAIL" \
+          --arg firstName "$BOOTSTRAP_FIRST_NAME" \
+          --arg lastName "$BOOTSTRAP_LAST_NAME" \
+          '{
+            email: $email,
+            firstName: $firstName,
+            lastName: $lastName,
+            enabled: true,
+            emailVerified: true
+          }')
+
         if [ -z "$EXISTING_USER_ID" ]; then
           HTTP_CODE=$(curl -k -s -w "%%{http_code}" -o /dev/null -X POST "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$USER_PAYLOAD")
+            -d "$CREATE_USER_PAYLOAD")
           if [ "$HTTP_CODE" = "409" ]; then
             # Conflict usually means username or email already exists. Resolve by
             # looking up existing user and updating it idempotently.
@@ -290,7 +304,7 @@ resource "null_resource" "create_keycloak_oauth_client" {
             HTTP_CODE=$(curl -k -s -w "%%{http_code}" -o /dev/null -X PUT "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users/$EXISTING_USER_ID" \
               -H "Authorization: Bearer $TOKEN" \
               -H "Content-Type: application/json" \
-              -d "$USER_PAYLOAD")
+              -d "$UPDATE_USER_PAYLOAD")
             if [ "$HTTP_CODE" != "204" ] && [ "$HTTP_CODE" != "200" ]; then
               echo "ERROR: Failed to update existing bootstrap user after conflict (HTTP $HTTP_CODE)"
               exit 1
@@ -308,7 +322,7 @@ resource "null_resource" "create_keycloak_oauth_client" {
           HTTP_CODE=$(curl -k -s -w "%%{http_code}" -o /dev/null -X PUT "https://$KEYCLOAK_URL/admin/realms/${var.keycloak_realm}/users/$EXISTING_USER_ID" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$USER_PAYLOAD")
+            -d "$UPDATE_USER_PAYLOAD")
           if [ "$HTTP_CODE" != "204" ] && [ "$HTTP_CODE" != "200" ]; then
             echo "ERROR: Failed to update bootstrap user (HTTP $HTTP_CODE)"
             exit 1

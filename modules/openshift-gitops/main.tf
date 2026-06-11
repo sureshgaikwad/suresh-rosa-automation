@@ -234,6 +234,14 @@ spec:
       requests:
         cpu: 250m
         memory: 128Mi
+  repo:
+    resources:
+      limits:
+        cpu: "2"
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
   ha:
     enabled: false
 EOF

@@ -404,7 +404,10 @@ module "gitops_template_processor" {
   oidc_client_secret              = var.deploy_keycloak && var.deploy_developerhub ? random_password.oidc_client_secret[0].result : ""
   session_secret                  = var.deploy_developerhub ? random_password.session_secret[0].result : ""
 
-  depends_on = [module.openshift_gitops]
+  depends_on = [
+    module.openshift_gitops,
+    module.argocd_applications
+  ]
 }
 
 ##############################################################

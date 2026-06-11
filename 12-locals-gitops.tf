@@ -13,10 +13,11 @@ locals {
   deploy_nvidia_gpu_operator_application = var.deploy_openshift_ai ? true : var.deploy_nvidia_gpu_operator_application
   deploy_openshift_servicemesh           = var.deploy_openshift_servicemesh # RHOAI 3.x auto-installs Service Mesh 3 via OLM dependency
   deploy_openshift_serverless            = var.deploy_openshift_ai ? true : var.deploy_openshift_serverless
-  deploy_openshift_lightspeed            = var.deploy_openshift_ai ? true : var.deploy_openshift_lightspeed
-  deploy_kueue_operator                  = var.deploy_openshift_ai ? true : var.deploy_kueue_operator
-  deploy_jobset_operator                 = var.deploy_openshift_ai ? true : var.deploy_jobset_operator
-  deploy_cert_manager_operator           = var.deploy_openshift_ai ? true : var.deploy_cert_manager_operator
+  # Keep Lightspeed as an explicit opt-in feature. Do not force-enable it with OpenShift AI.
+  deploy_openshift_lightspeed  = var.deploy_openshift_lightspeed
+  deploy_kueue_operator        = var.deploy_openshift_ai ? true : var.deploy_kueue_operator
+  deploy_jobset_operator       = var.deploy_openshift_ai ? true : var.deploy_jobset_operator
+  deploy_cert_manager_operator = var.deploy_openshift_ai ? true : var.deploy_cert_manager_operator
 }
 
 ##############################################################
@@ -158,14 +159,14 @@ locals {
       dependency_weight = 2
     }
 
-    # Developer Hub Operator (use root path to honor kustomization and exclude generated secrets/configmaps)
+    # Developer Hub instance resources (Backstage CR, PVC, configmaps, RBAC)
     developer-hub-operator = {
       enabled           = var.deploy_developerhub && local.deploy_openshift_gitops
       path              = "operators/developer-hub"
       namespace         = "demo-project"
       repo_url          = "https://github.com/sureshgaikwad/gitops-catalog"
       create_namespace  = true
-      dependency_weight = 3 # Depends on Keycloak if authentication is needed
+      dependency_weight = 3 # Depends on operator availability and Keycloak auth setup
     }
 
     # OpenShift Dev Spaces Operator
