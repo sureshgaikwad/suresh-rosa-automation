@@ -1,0 +1,38 @@
+aws_region = "us-east-1"
+
+# From cluster stack outputs (../../ or examples/rosa-hcp-public)
+cluster_id             = "REPLACE_WITH_CLUSTER_ID"
+cluster_api_url        = "https://api.REPLACE.openshiftapps.com:443"
+cluster_admin_username = "cluster-admin"
+cluster_admin_password = "REPLACE_WITH_PASSWORD"
+# cluster_domain         = "mycluster.xxxx.p3.openshiftapps.com"  # optional; auto-discovered when needed
+
+deploy_openshift_gitops = true
+deploy_vote_application = true
+
+# ---------------------------------------------------------------------------
+# RHOAI 3.5 — pick one profile (all values are overridable; nothing cluster-
+# specific is hardcoded in gitops-catalog).
+# ---------------------------------------------------------------------------
+
+# Profile A: OpenShift AI only (stable-3.5 + DSCI + DSC + GPU/NFD deps)
+# deploy_openshift_ai   = true
+# rhoai_channel         = "stable-3.5"
+# rhoai_genai_backend   = "ogx"          # or "llamastack"
+
+# Profile B: AI + Models-as-a-Service (RHCL, gateway, postgres, sample model)
+# deploy_rhoai_maas                 = true
+# deploy_rhoai_maas_sample_model    = true
+# rhoai_maas_tls_secret_name        = ""   # empty = auto-detect ROSA IngressController cert
+# rhoai_maas_model_namespace        = "rhoai-deploy"
+# rhoai_maas_model_oci_uri          = "oci://quay.io/redhat-ai-services/modelcar-catalog:qwen2.5-0.5b-instruct"
+# rhoai_maas_vllm_image             = "registry.redhat.io/rhaii/vllm-cpu-rhel9@sha256:…"  # no :latest
+
+# Profile C: full stack including llm-d + KEDA (implies MaaS + AI)
+# deploy_rhoai_llmd       = true
+# deploy_rhoai_llmd_keda  = true
+# rhoai_llmd_keda_max_replicas = "4"
+# rhoai_llmd_keda_threshold    = "5"
+
+# Optional: also sync the existing GPU qwen InferenceService from the catalog
+# deploy_ai_model = true
