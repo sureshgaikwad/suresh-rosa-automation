@@ -42,11 +42,13 @@ terraform apply
 | `deploy_openshift_ai` | RHOAI + NFD/GPU/Serverless/Kueue/JobSet/cert-manager |
 | `deploy_rhoai_maas` | Implies AI + RHCL, LWS, LB Gateway, postgres, UWM, dashboard/telemetry, COO + OpenTelemetry + MCP catalog |
 | `deploy_rhoai_llmd` | Implies MaaS + KEDA + llm-d (default in this overlay’s tfvars) |
+| `deploy_openshift_lightspeed` | Lightspeed operator path + OLSConfig (uses MaaS sample model) |
 
 - `rhoai_genai_backend = "ogx"` (default) or `"llamastack"`
 - `rhoai_channel = "stable-3.5"`
 - MaaS Gateway TLS: leave `rhoai_maas_tls_secret_name` empty to auto-use the ROSA IngressController default cert (or catalog `maas-gateway-tls` fallback)
 - Sample CPU vLLM image defaults to a RHOAI 3.5 digest (`:latest` is rejected by registry.redhat.io)
+- Sample model serves with auto tool-choice (`hermes`), materializes the OCI modelcar to a real path (avoids HFValidationError), and defaults to `max-model-len=8192` for Lightspeed MCP tool schemas + ToolFiltering
 
 GPU capacity stays in the **root** `machine_pools`; this overlay installs the NVIDIA operator when AI is on.
 

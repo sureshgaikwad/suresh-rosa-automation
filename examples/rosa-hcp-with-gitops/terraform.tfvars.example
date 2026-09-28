@@ -34,5 +34,9 @@ deploy_vote_application = true
 # rhoai_llmd_keda_max_replicas = "4"
 # rhoai_llmd_keda_threshold    = "5"
 
+# OpenShift Lightspeed (OLSConfig in gitops-catalog points at the MaaS sample
+# model; catalog enables ToolFiltering + 8192 context for MCP tool schemas)
+# deploy_openshift_lightspeed = true
+
 # Optional: also sync the existing GPU qwen InferenceService from the catalog
 # deploy_ai_model = true
