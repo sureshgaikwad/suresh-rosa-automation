@@ -96,3 +96,72 @@ variable "retry_limit" {
   default     = 5
   description = "Number of sync retries."
 }
+
+variable "dependency_weight" {
+  type        = number
+  default     = null
+  description = "Optional sync-wave weight applied as argocd.argoproj.io/sync-wave on the Application."
+}
+
+variable "kustomize_components" {
+  type        = list(string)
+  default     = []
+  description = "Optional Kustomize components (paths relative to the application path)."
+}
+
+variable "kustomize_patches" {
+  type = list(object({
+    target = optional(object({
+      group               = optional(string)
+      version             = optional(string)
+      kind                = optional(string)
+      name                = optional(string)
+      namespace           = optional(string)
+      label_selector      = optional(string)
+      annotation_selector = optional(string)
+    }))
+    patch = optional(string)
+    path  = optional(string)
+  }))
+  default     = []
+  description = "Optional Argo CD kustomize patches (inline patch YAML/JSON or path)."
+}
+
+variable "kustomize_images" {
+  type        = list(string)
+  default     = []
+  description = "Optional kustomize image overrides (e.g. name=newname:tag)."
+}
+
+variable "kustomize_common_annotations" {
+  type        = map(string)
+  default     = {}
+  description = "Optional commonAnnotations merged into all rendered resources."
+}
+
+variable "helm_parameters" {
+  type = list(object({
+    name  = string
+    value = string
+  }))
+  default     = []
+  description = "Optional Helm parameters when the source is a Helm chart."
+}
+
+variable "helm_values" {
+  type        = string
+  default     = ""
+  description = "Optional inline Helm values YAML."
+}
+
+variable "use_helm" {
+  type        = bool
+  default     = false
+  description = "When true, configure source.helm instead of source.kustomize."
+}
+
+variable "sync_options" {
+  type        = list(string)
+  default     = []
+  description = "Extra syncOptions appended to the Application syncPolicy."
+}

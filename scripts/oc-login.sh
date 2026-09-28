@@ -15,7 +15,10 @@
 ################################################################################
 
 set -e
-export KUBECONFIG="${KUBECONFIG:-/tmp/rosa-kubeconfig-$$}"
+# Always use a unique kubeconfig path. Inherited/empty KUBECONFIG from the
+# parent shell (or parallel Terraform local-exec) races and deletes the file
+# before sibling provisioners finish oc apply.
+export KUBECONFIG="/tmp/rosa-kubeconfig-$$-${RANDOM:-0}-$(date +%s)"
 
 if ! oc login --username="$OC_USERNAME" \
               --password="$OC_PASSWORD" \
