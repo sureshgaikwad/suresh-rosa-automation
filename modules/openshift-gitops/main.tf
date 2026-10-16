@@ -179,16 +179,38 @@ resource "null_resource" "create_argocd_instance" {
   provisioner "local-exec" {
     command = <<-EOT
       #!/bin/bash
-      set -e
+      set -euo pipefail
 
       export OC_USERNAME="${var.cluster_admin_username}"
       export OC_PASSWORD="${var.cluster_admin_password}"
       export OC_API_URL="${var.cluster_api_url}"
-      source ${path.root}/scripts/oc-login.sh
+      if [ -f "${path.root}/scripts/oc-login.sh" ]; then
+        source "${path.root}/scripts/oc-login.sh"
+      else
+        source "${path.root}/../../scripts/oc-login.sh"
+      fi
 
-      # Create ArgoCD instance
-      cat <<EOF | oc apply --kubeconfig=$KUBECONFIG -f -
-apiVersion: argoproj.io/v1alpha1
+      echo "Waiting for GitOps operator CSV and ArgoCD CRD..."
+      elapsed=0
+      while [ "$elapsed" -lt 600 ]; do
+        csv_phase=$(oc --kubeconfig="$KUBECONFIG" get csv -n openshift-gitops \
+          -o jsonpath='{.items[?(@.spec.displayName=="Red Hat OpenShift GitOps")].status.phase}' 2>/dev/null || true)
+        if [ "$csv_phase" = "Succeeded" ] && oc --kubeconfig="$KUBECONFIG" get crd argocds.argoproj.io >/dev/null 2>&1; then
+          echo "GitOps operator ready (CSV=$csv_phase)"
+          break
+        fi
+        sleep 15
+        elapsed=$((elapsed + 15))
+        echo "Operator not ready yet (CSV=$csv_phase; $elapsed/600s)"
+      done
+      if [ "$elapsed" -ge 600 ]; then
+        echo "ERROR: timed out waiting for GitOps operator / ArgoCD CRD"
+        exit 1
+      fi
+
+      # Operator often creates the default instance via GitopsService; apply is idempotent.
+      cat <<EOF | oc apply --kubeconfig="$KUBECONFIG" -f -
+apiVersion: argoproj.io/v1beta1
 kind: ArgoCD
 metadata:
   name: openshift-gitops
@@ -246,10 +268,21 @@ spec:
     enabled: false
 EOF
 
-      sleep 30
+      echo "Waiting for application-controller ServiceAccount..."
+      elapsed=0
+      while [ "$elapsed" -lt 300 ]; do
+        if oc --kubeconfig="$KUBECONFIG" get sa openshift-gitops-argocd-application-controller -n openshift-gitops >/dev/null 2>&1; then
+          break
+        fi
+        sleep 10
+        elapsed=$((elapsed + 10))
+      done
+      if [ "$elapsed" -ge 300 ]; then
+        echo "ERROR: timed out waiting for openshift-gitops-argocd-application-controller SA"
+        exit 1
+      fi
 
-      # Create ClusterRole for ArgoCD
-      cat <<EOF | oc apply --kubeconfig=$KUBECONFIG -f -
+      cat <<EOF | oc apply --kubeconfig="$KUBECONFIG" -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -262,8 +295,7 @@ rules:
   verbs: ["*"]
 EOF
 
-      # Create ClusterRoleBinding
-      cat <<EOF | oc apply --kubeconfig=$KUBECONFIG -f -
+      cat <<EOF | oc apply --kubeconfig="$KUBECONFIG" -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -278,7 +310,7 @@ subjects:
   namespace: openshift-gitops
 EOF
 
-      rm -f $KUBECONFIG
+      rm -f "$KUBECONFIG"
       echo "ArgoCD instance and RBAC configured"
     EOT
   }

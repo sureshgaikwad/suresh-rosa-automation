@@ -394,3 +394,17 @@ variable "registry_config" {
     error_message = "Registry config cannot specify both allowed_registries and blocked_registries - they are mutually exclusive."
   }
 }
+
+##############################################################
+# Red Hat build of Karpenter (AutoNode)
+##############################################################
+
+variable "auto_node" {
+  type = object({
+    mode     = string
+    role_arn = string
+  })
+  default     = null
+  nullable    = true
+  description = "AutoNode (Red Hat build of Karpenter) configuration. Set mode=\"enabled\" and role_arn to the Karpenter controller IAM role. Requires OpenShift >= 4.22."
+}

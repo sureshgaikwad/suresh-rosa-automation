@@ -20,6 +20,12 @@ locals {
     local.is_private_cluster || var.zero_egress ? module.vpc[0].private_subnets : concat(module.vpc[0].public_subnets, module.vpc[0].private_subnets)
   ) : (var.aws_subnet_ids != null ? var.aws_subnet_ids : [])
 
+  # Private subnets only — used for Karpenter AutoNode discovery tags.
+  private_subnet_ids = var.create_vpc ? module.vpc[0].private_subnets : [
+    for subnet in data.aws_subnet.provided_subnet : subnet.id
+    if subnet.map_public_ip_on_launch == false
+  ]
+
   # Computed cluster parameters
   cluster_machine_cidr       = var.zero_egress && var.create_vpc ? module.vpc[0].cidr_block : var.machine_cidr
   cluster_availability_zones = var.create_vpc ? module.vpc[0].availability_zones : var.aws_availability_zones
@@ -43,6 +49,22 @@ locals {
       for subnet in data.aws_subnet.provided_subnet : subnet.availability_zone => subnet.id
     }
   )
+
+  # AZ-keyed map so aws_ec2_tag for_each keys stay known during destroy
+  # (subnet IDs are apply-time values and break toset(subnet_id) for_each).
+  karpenter_discovery_subnets = var.enable_karpenter ? local.machine_pool_candidate_subnets_by_az : {}
+
+  # Only emit cluster discovery tags when AutoNode is on AND cluster_id is known.
+  # Avoids destroy/plan errors when the cluster resource is already gone.
+  karpenter_subnet_cluster_tags = (
+    var.enable_karpenter && try(module.rosa_cluster_hcp[0].cluster_id, null) != null
+    ) ? {
+    for az, subnet_id in local.karpenter_discovery_subnets :
+    az => {
+      subnet_id = subnet_id
+      tag_key   = "kubernetes.io/cluster/${module.rosa_cluster_hcp[0].cluster_id}"
+    }
+  } : {}
 
   machine_pool_selected_subnet_ids = {
     for pool_key, pool in var.machine_pools : pool_key => (

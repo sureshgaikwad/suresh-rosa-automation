@@ -53,7 +53,12 @@ output "rhcs_url" {
 
 output "rhcs_authentication_method" {
   description = "RHCS authentication method being used"
-  value       = var.rhcs_token != null ? "token" : (var.rhcs_client_id != null ? "client_credentials" : "environment_variables")
+  # Presence checks touch sensitive vars; nonsensitive() keeps this label printable.
+  value = (
+    nonsensitive(var.rhcs_token != null) ? "token" : (
+      nonsensitive(var.rhcs_client_id != null) ? "client_credentials" : "environment_variables"
+    )
+  )
 }
 
 ##############################################################
@@ -65,9 +70,20 @@ output "cluster_id" {
   description = "Unique identifier of the cluster."
 }
 
+output "karpenter_enabled" {
+  value       = var.enable_karpenter
+  description = "Whether Red Hat build of Karpenter (AutoNode) is enabled on the cluster."
+}
+
+output "karpenter_controller_role_arn" {
+  value       = var.enable_karpenter ? module.karpenter_autonode[0].role_arn : null
+  description = "IAM role ARN used by the Karpenter controller in the hosted control plane."
+}
+
 output "cluster_admin_username" {
   value       = local.cluster_admin_username
   description = "The username of the admin user."
+  sensitive   = true
 }
 
 output "cluster_admin_password" {

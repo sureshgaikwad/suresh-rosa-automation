@@ -98,6 +98,9 @@ resource "rhcs_cluster_rosa_hcp" "rosa_hcp_cluster" {
   destroy_timeout                     = var.destroy_timeout
   registry_config                     = var.registry_config
 
+  # Red Hat build of Karpenter (AutoNode) — requires OpenShift >= 4.22
+  auto_node = var.auto_node
+
   lifecycle {
     precondition {
       condition = (

@@ -219,6 +219,17 @@ locals {
       kustomize_components = []
       kustomize_patches    = []
     }
+    # Karpenter controllers are HCP-managed; this app only syncs NodePool CRs.
+    rosa-karpenter = {
+      enabled              = var.deploy_rosa_karpenter && local.deploy_openshift_gitops
+      path                 = "operators/rosa-karpenter"
+      namespace            = "kube-system"
+      repo_url             = local.catalog_repo
+      create_namespace     = false
+      dependency_weight    = 2
+      kustomize_components = []
+      kustomize_patches    = []
+    }
     authorino-operator = {
       enabled              = var.deploy_authorino_operator && local.deploy_openshift_gitops
       path                 = "operators/authorino-operator"

@@ -105,7 +105,8 @@ resource "aws_subnet" "private_subnet" {
   tags = merge(
     {
       "Name"                            = var.zero_egress ? "${var.name_prefix}-private-${local.availability_zones[count.index]}" : join("-", [var.name_prefix, "subnet", "private${count.index + 1}", local.availability_zones[count.index]])
-      "kubernetes.io/role/internal-elb" = var.zero_egress ? "1" : ""
+      # Required for ROSA internal LBs and Karpenter OpenshiftEC2NodeClass subnet discovery.
+      "kubernetes.io/role/internal-elb" = "1"
     },
     local.tags,
   )
@@ -241,7 +242,7 @@ resource "aws_vpc_endpoint" "s3" {
   count = var.zero_egress ? 0 : 1
 
   vpc_id       = aws_vpc.vpc.id
-  service_name = "com.amazonaws.${data.aws_region.current.name}.s3"
+  service_name = "com.amazonaws.${data.aws_region.current.region}.s3"
 }
 
 resource "aws_vpc_endpoint_route_table_association" "private_vpc_endpoint_route_table_association" {
@@ -327,7 +328,7 @@ resource "aws_vpc_endpoint" "gateway" {
   for_each = var.zero_egress && var.create_endpoints ? local.gateway_endpoints : {}
 
   vpc_id            = aws_vpc.vpc.id
-  service_name      = "com.amazonaws.${data.aws_region.current.name}.${each.key}"
+  service_name      = "com.amazonaws.${data.aws_region.current.region}.${each.key}"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = aws_route_table.private_route_table[*].id
 
@@ -344,7 +345,7 @@ resource "aws_vpc_endpoint" "interface" {
   for_each = var.zero_egress && var.create_endpoints ? local.interface_endpoints : {}
 
   vpc_id              = aws_vpc.vpc.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.${each.key}"
+  service_name        = "com.amazonaws.${data.aws_region.current.region}.${each.key}"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private_subnet[*].id
   security_group_ids  = [aws_security_group.vpce[0].id]

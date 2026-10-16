@@ -79,6 +79,48 @@ module "vpc" {
 }
 
 ##############################################################
+# Red Hat build of Karpenter (AutoNode) IAM
+##############################################################
+
+module "karpenter_autonode" {
+  source = "./modules/karpenter-autonode"
+  count  = var.enable_karpenter ? 1 : 0
+
+  cluster_name         = var.cluster_name
+  oidc_endpoint_url    = var.create_oidc ? module.oidc_config_and_provider[0].oidc_endpoint_url : var.oidc_endpoint_url
+  role_name            = var.karpenter_role_name
+  path                 = local.path
+  permissions_boundary = var.permissions_boundary
+  tags                 = var.tags
+
+  depends_on = [module.oidc_config_and_provider]
+}
+
+# Karpenter OpenshiftEC2NodeClass discovers private subnets via these tags.
+# Kept outside the IAM module to avoid a cycle with the cluster resource.
+# for_each is AZ-keyed (not subnet-ID-keyed) so destroy/plan works when subnet
+# IDs are (known after apply). Gated by enable_karpenter (default false).
+resource "aws_ec2_tag" "karpenter_private_subnet_cluster" {
+  for_each = local.karpenter_subnet_cluster_tags
+
+  resource_id = each.value.subnet_id
+  key         = each.value.tag_key
+  value       = "shared"
+
+  depends_on = [module.rosa_cluster_hcp]
+}
+
+# modules/vpc already sets internal-elb=1 on private subnets when create_vpc=true.
+# Only tag bring-your-own subnets here.
+resource "aws_ec2_tag" "karpenter_private_subnet_internal_elb" {
+  for_each = var.enable_karpenter && !var.create_vpc ? local.karpenter_discovery_subnets : {}
+
+  resource_id = each.value
+  key         = "kubernetes.io/role/internal-elb"
+  value       = "1"
+}
+
+##############################################################
 # ROSA HCP Cluster (handles both standard and zero-egress)
 ##############################################################
 
@@ -97,7 +139,12 @@ module "rosa_cluster_hcp" {
   aws_subnet_ids          = local.cluster_subnet_ids
   subnet_ids_are_computed = var.create_vpc
 
-  depends_on = [module.vpc]
+  auto_node = var.enable_karpenter ? {
+    mode     = "enabled"
+    role_arn = module.karpenter_autonode[0].role_arn
+  } : null
+
+  depends_on = [module.vpc, module.karpenter_autonode]
 
   # Network configuration
   machine_cidr = local.cluster_machine_cidr
@@ -255,12 +302,19 @@ module "rhcs_hcp_machine_pool" {
     max_replicas = null
   }
 
-  aws_node_pool = {
-    instance_type                 = try(each.value.aws_node_pool.instance_type, try(each.value.instance_type, "m5.xlarge"))
-    tags                          = merge(var.tags, try(each.value.aws_node_pool.tags, try(each.value.tags, {})))
-    additional_security_group_ids = try(each.value.aws_node_pool.additional_security_group_ids, try(each.value.additional_security_group_ids, null))
-    disk_size                     = try(each.value.aws_node_pool.disk_size, try(each.value.disk_size, null))
-  }
+  aws_node_pool = merge(
+    {
+      instance_type = try(each.value.aws_node_pool.instance_type, try(each.value.instance_type, "m5.xlarge"))
+      tags          = merge(var.tags, try(each.value.aws_node_pool.tags, try(each.value.tags, {})))
+    },
+    try(each.value.aws_node_pool.additional_security_group_ids, try(each.value.additional_security_group_ids, null)) != null ? {
+      additional_security_group_ids = try(each.value.aws_node_pool.additional_security_group_ids, each.value.additional_security_group_ids)
+    } : {},
+    # Prefer aws_node_pool.disk_size; fall back to top-level disk_size. Omit when unset so RHCS default applies.
+    try(each.value.aws_node_pool.disk_size, try(each.value.disk_size, null)) != null ? {
+      disk_size = try(each.value.aws_node_pool.disk_size, each.value.disk_size)
+    } : {},
+  )
 
   subnet_id         = local.machine_pool_selected_subnet_ids[each.key]
   openshift_version = var.openshift_version

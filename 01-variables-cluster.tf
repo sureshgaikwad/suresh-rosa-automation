@@ -232,7 +232,7 @@ variable "machine_pools" {
       max_replicas = optional(number)
     }))
 
-    # Either provide aws_node_pool or the legacy instance_type/tags/additional_security_group_ids fields.
+    # Either provide aws_node_pool or the legacy instance_type/tags/additional_security_group_ids/disk_size fields.
     aws_node_pool = optional(object({
       instance_type                 = optional(string)
       tags                          = optional(map(string))
@@ -243,6 +243,8 @@ variable "machine_pools" {
     instance_type                 = optional(string)
     tags                          = optional(map(string))
     additional_security_group_ids = optional(list(string))
+    # Root disk size in GiB (alias for aws_node_pool.disk_size). Immutable after pool creation.
+    disk_size = optional(number)
 
     subnet_id = optional(string)
 
@@ -265,6 +267,22 @@ variable "ignore_machine_pools_deletion_error" {
   type        = bool
   default     = false
   description = "Ignore machine pool deletion error. Assists when cluster resource is managed within the same file for the destroy use case"
+}
+
+##############################################################
+# Red Hat build of Karpenter (AutoNode)
+##############################################################
+
+variable "enable_karpenter" {
+  type        = bool
+  default     = false
+  description = "Install-time toggle for Red Hat build of Karpenter (AutoNode). When true: creates the controller IAM role, sets cluster auto_node, and tags private subnets for discovery. Default false. Requires OpenShift >= 4.22. NodePools are day-2 GitOps (deploy_rosa_karpenter)."
+}
+
+variable "karpenter_role_name" {
+  type        = string
+  default     = null
+  description = "Optional override for the Karpenter controller IAM role name (default: rosa-karpenter-controller-role-<cluster_name>)."
 }
 
 ##############################################################

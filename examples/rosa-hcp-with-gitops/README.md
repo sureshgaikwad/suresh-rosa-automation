@@ -52,6 +52,16 @@ terraform apply
 
 GPU capacity stays in the **root** `machine_pools`; this overlay installs the NVIDIA operator when AI is on.
 
+## Karpenter (AutoNode) NodePools
+
+Enable AutoNode on the **root** cluster stack (`enable_karpenter = true`), then set:
+
+```hcl
+deploy_rosa_karpenter = true
+```
+
+That syncs `operators/rosa-karpenter` (NodePool CRs only — controllers run in the HCP). See [docs/rosa-karpenter.md](../../docs/rosa-karpenter.md).
+
 ## Destroy
 
 ```bash

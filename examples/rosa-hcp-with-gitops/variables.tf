@@ -8,23 +8,27 @@ variable "aws_region" {
 
 variable "cluster_id" {
   type        = string
-  description = "OCM cluster ID from the deployed ROSA stack (terraform output -raw cluster_id)"
+  default     = ""
+  description = "OCM cluster ID from the deployed ROSA stack (terraform output -raw cluster_id). Empty is allowed for terraform destroy when TF_VAR_* are unset."
 }
 
 variable "cluster_api_url" {
   type        = string
-  description = "Cluster API URL (terraform output -raw cluster_api_url)"
+  default     = ""
+  description = "Cluster API URL (terraform output -raw cluster_api_url). Empty allowed for destroy."
 }
 
 variable "cluster_admin_username" {
   type        = string
-  description = "Cluster admin username"
+  default     = ""
+  description = "Cluster admin username. Empty allowed for destroy."
 }
 
 variable "cluster_admin_password" {
   type        = string
+  default     = ""
   sensitive   = true
-  description = "Cluster admin password"
+  description = "Cluster admin password. Empty allowed for destroy."
 }
 
 variable "cluster_domain" {
@@ -273,6 +277,12 @@ variable "deploy_openshift_lightspeed" {
 variable "deploy_authorino_operator" {
   type    = bool
   default = false
+}
+
+variable "deploy_rosa_karpenter" {
+  type        = bool
+  default     = false
+  description = "Deploy Red Hat build of Karpenter NodePool via GitOps (operators/rosa-karpenter). Requires enable_karpenter=true on the cluster stack first."
 }
 
 variable "deploy_nfd" {

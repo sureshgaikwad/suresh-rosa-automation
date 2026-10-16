@@ -10,6 +10,9 @@ cluster_admin_password = "REPLACE_WITH_PASSWORD"
 deploy_openshift_gitops = true
 deploy_vote_application = true
 
+# Red Hat build of Karpenter NodePools (requires enable_karpenter=true on cluster stack)
+# deploy_rosa_karpenter = true
+
 # ---------------------------------------------------------------------------
 # RHOAI 3.5 — pick one profile (all values are overridable; nothing cluster-
 # specific is hardcoded in gitops-catalog).
