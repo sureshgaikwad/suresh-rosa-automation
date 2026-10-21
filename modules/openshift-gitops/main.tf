@@ -241,13 +241,14 @@ spec:
     scopes: '[groups]'
   controller:
     processors: {}
+    # RHOAI / Lightspeed / many Applications need >2Gi; default OOMKills under load.
     resources:
       limits:
         cpu: 2000m
-        memory: 2048Mi
+        memory: 4Gi
       requests:
         cpu: 250m
-        memory: 1024Mi
+        memory: 2Gi
   redis:
     resources:
       limits:
