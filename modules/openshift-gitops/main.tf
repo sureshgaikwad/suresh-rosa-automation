@@ -267,6 +267,37 @@ spec:
         memory: 512Mi
   ha:
     enabled: false
+  # KServe sets condition Stopped=False when running; default health treats that as Degraded.
+  resourceHealthChecks:
+    - group: serving.kserve.io
+      kind: InferenceService
+      check: |
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = "Waiting for status"
+        if obj.status ~= nil and obj.status.conditions ~= nil then
+          for i, c in ipairs(obj.status.conditions) do
+            if c.type == "Ready" then
+              if c.status == "True" then
+                hs.status = "Healthy"
+                hs.message = "Ready"
+                return hs
+              elseif c.status == "False" then
+                hs.status = "Degraded"
+                hs.message = c.message or "Not Ready"
+                return hs
+              end
+            end
+          end
+        end
+        return hs
+  resourceIgnoreDifferences:
+    resourceIdentifiers:
+      - group: serving.kserve.io
+        kind: InferenceService
+        customization:
+          jsonPointers:
+            - /metadata/annotations/serving.kserve.io~1deploymentMode
 EOF
 
       echo "Waiting for application-controller ServiceAccount..."
