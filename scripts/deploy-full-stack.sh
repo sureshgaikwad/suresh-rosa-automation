@@ -88,15 +88,80 @@ wait_for_cluster_api() {
   die "Cluster API not reachable within ${API_WAIT_TIMEOUT_SEC}s: ${api_url}"
 }
 
+cluster_enable_karpenter() {
+  # Prefer live Terraform output; fall back to cluster terraform.tfvars.
+  local out
+  out="$(tf_output_raw karpenter_enabled 2>/dev/null || true)"
+  [[ "${out}" == "true" ]] && return 0
+  if [[ -f "${WORK_DIR}/terraform.tfvars" ]] \
+    && grep -Eq '^\s*enable_karpenter\s*=\s*true\s*$' "${WORK_DIR}/terraform.tfvars"; then
+    return 0
+  fi
+  return 1
+}
+
+assert_rosa_karpenter_catalog() {
+  # NodePools come from gitops-catalog; AutoNode without this path = no provisioning.
+  local catalog_dir="${GITOPS_CATALOG_DIR:-${REPO_ROOT}/../gitops-catalog}"
+  local repo_url
+  repo_url="$(grep -E '^\s*gitops_repo_url\s*=' "${GITOPS_TFVARS}" 2>/dev/null \
+    | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/' || true)"
+  repo_url="${repo_url:-https://github.com/sureshgaikwad/gitops-catalog}"
+
+  if [[ -f "${catalog_dir}/operators/rosa-karpenter/nodepool-default.yaml" ]]; then
+    # Prefer sibling checkout; still require it on the remote Argo will clone.
+    if [[ "$(cd "${catalog_dir}" && git rev-parse --is-inside-work-tree 2>/dev/null)" == "true" ]]; then
+      if ! git -C "${catalog_dir}" ls-files --error-unmatch operators/rosa-karpenter/nodepool-default.yaml >/dev/null 2>&1; then
+        die "operators/rosa-karpenter exists locally but is not committed. Commit+push to ${repo_url} before GitOps apply."
+      fi
+      if [[ -n "$(git -C "${catalog_dir}" status --porcelain -- operators/rosa-karpenter 2>/dev/null)" ]]; then
+        log "warning: local operators/rosa-karpenter has uncommitted changes; Argo uses the remote"
+      fi
+      # Ensure origin has the path (compare to upstream tracking or origin/HEAD).
+      local remote_ref
+      remote_ref="$(git -C "${catalog_dir}" rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo origin/HEAD)"
+      if ! git -C "${catalog_dir}" cat-file -e "${remote_ref}:operators/rosa-karpenter/nodepool-default.yaml" 2>/dev/null; then
+        die "operators/rosa-karpenter not on ${remote_ref}. Push to ${repo_url} before GitOps apply (Argo needs the remote path)."
+      fi
+    fi
+    log "Verified operators/rosa-karpenter present for Karpenter NodePools"
+    return 0
+  fi
+
+  # No local catalog — sparse-clone the remote Argo will use.
+  if command -v git >/dev/null 2>&1; then
+    local tmp
+    tmp="$(mktemp -d)"
+    if git clone --depth 1 --filter=blob:none --sparse "${repo_url}" "${tmp}/cat" >/dev/null 2>&1; then
+      git -C "${tmp}/cat" sparse-checkout set operators/rosa-karpenter >/dev/null 2>&1 || true
+      if [[ -f "${tmp}/cat/operators/rosa-karpenter/nodepool-default.yaml" ]]; then
+        rm -rf "${tmp}"
+        log "Verified operators/rosa-karpenter on ${repo_url}"
+        return 0
+      fi
+    fi
+    rm -rf "${tmp}"
+  fi
+
+  die "gitops-catalog missing operators/rosa-karpenter (needed when enable_karpenter=true). Push that path to ${repo_url} before GitOps apply."
+}
+
 write_gitops_feature_tfvars() {
   # Feature flags only — no cluster credentials written to disk.
   if [[ ! -f "${GITOPS_TFVARS}" ]]; then
     cp "${GITOPS_DIR}/terraform.tfvars.example" "${GITOPS_TFVARS}"
   fi
 
-  python3 - "${GITOPS_TFVARS}" <<'PY'
+  local karpenter_flag="false"
+  if cluster_enable_karpenter; then
+    karpenter_flag="true"
+    log "Cluster has enable_karpenter=true → setting deploy_rosa_karpenter=true"
+  fi
+
+  python3 - "${GITOPS_TFVARS}" "${karpenter_flag}" <<'PY'
 import re, sys
 path = sys.argv[1]
+karpenter = sys.argv[2]
 with open(path) as f:
     text = f.read()
 
@@ -120,6 +185,8 @@ text = ensure_bool(text, "deploy_rhoai_llmd", "true")
 text = ensure_bool(text, "deploy_rhoai_maas_sample_model", "true")
 text = ensure_bool(text, "deploy_rhoai_llmd_keda", "true")
 text = ensure_bool(text, "deploy_openshift_lightspeed", "true")
+# Pair NodePools with cluster AutoNode so Karpenter can provision from day-0.
+text = ensure_bool(text, "deploy_rosa_karpenter", karpenter)
 text = ensure_str(text, "rhoai_channel", "stable-3.5")
 text = ensure_str(text, "rhoai_genai_backend", "ogx")
 text = ensure_str(text, "gitops_repo_url", "https://github.com/sureshgaikwad/gitops-catalog")
@@ -232,6 +299,10 @@ wait_for_cluster_api \
   "${TF_VAR_cluster_admin_password}"
 
 write_gitops_feature_tfvars
+
+if cluster_enable_karpenter; then
+  assert_rosa_karpenter_catalog
+fi
 
 log "Phase 2/2: GitOps / RHOAI overlay (${GITOPS_DIR})"
 "$TF" -chdir="${GITOPS_DIR}" init -input=false

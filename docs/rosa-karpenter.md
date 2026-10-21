@@ -6,8 +6,28 @@ This repo splits responsibilities the same way as other features:
 | Layer | What | How |
 |-------|------|-----|
 | **Cluster Terraform** | IAM role + enable AutoNode | `enable_karpenter = true` |
-| **GitOps catalog** | `NodePool` CRs | `operators/rosa-karpenter` |
-| **Day-2 overlay** | Argo CD Application | `deploy_rosa_karpenter = true` |
+| **GitOps catalog** | `NodePool` CRs | `operators/rosa-karpenter` (**must be on `gitops_repo_url` before apply**) |
+| **GitOps overlay** | Argo CD Application | `deploy_rosa_karpenter = true` |
+
+Without a synced **NodePool**, AutoNode will not provision for pending pods (controllers + EC2NodeClass alone are not enough).
+
+## Install-time checklist (do this before first `terraform apply`)
+
+Set **both** flags in the initial tfvars (or use `./scripts/deploy-full-stack.sh`, which pairs them):
+
+```hcl
+# cluster stack terraform.tfvars
+enable_karpenter = true
+
+# examples/rosa-hcp-with-gitops/terraform.tfvars
+deploy_rosa_karpenter = true
+```
+
+1. Push `gitops-catalog/operators/rosa-karpenter` to `gitops_repo_url` (Argo fails with `app path does not exist` if missing).
+2. `enable_karpenter = true` on the **cluster** stack (IAM + `auto_node` + subnet discovery tags).
+3. `deploy_rosa_karpenter = true` on the **GitOps** overlay (creates the Argo app that syncs `default-np`).
+
+`deploy-full-stack.sh` automates (2)+(3): when cluster `enable_karpenter` / output `karpenter_enabled` is true, it sets `deploy_rosa_karpenter = true` and fails fast if the catalog path is missing.
 
 ## Prerequisites
 
@@ -38,16 +58,15 @@ auto_node = {
 
 Set `enable_karpenter = false` (or omit it) to skip AutoNode IAM, `auto_node`, and discovery tags entirely.
 
-## Day-2 GitOps
+## GitOps overlay (same initial provision)
 
-In `examples/rosa-hcp-with-gitops`:
+In `examples/rosa-hcp-with-gitops` (run right after the cluster is API-ready):
 
 ```hcl
 deploy_rosa_karpenter = true
 ```
 
-Push `gitops-catalog/operators/rosa-karpenter` to `gitops_repo_url` so Argo CD can sync. Controllers are HCP-managed; the catalog only ships `NodePool` CRs (default NodeClass is ROSA-owned).
-
+Controllers are HCP-managed; the catalog only ships `NodePool` CRs (default NodeClass is ROSA-owned).
 ## Verify
 
 ```bash

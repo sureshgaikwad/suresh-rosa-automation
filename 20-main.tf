@@ -98,13 +98,13 @@ module "karpenter_autonode" {
 
 # Karpenter OpenshiftEC2NodeClass discovers private subnets via these tags.
 # Kept outside the IAM module to avoid a cycle with the cluster resource.
-# for_each is AZ-keyed (not subnet-ID-keyed) so destroy/plan works when subnet
-# IDs are (known after apply). Gated by enable_karpenter (default false).
+# for_each keys = AZs (known at plan); cluster_id may be unknown until apply
+# and is only used in the tag key attribute (not in for_each).
 resource "aws_ec2_tag" "karpenter_private_subnet_cluster" {
-  for_each = local.karpenter_subnet_cluster_tags
+  for_each = local.karpenter_discovery_subnets
 
-  resource_id = each.value.subnet_id
-  key         = each.value.tag_key
+  resource_id = each.value
+  key         = "kubernetes.io/cluster/${module.rosa_cluster_hcp[0].cluster_id}"
   value       = "shared"
 
   depends_on = [module.rosa_cluster_hcp]

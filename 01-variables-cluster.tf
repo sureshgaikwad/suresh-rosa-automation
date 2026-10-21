@@ -276,7 +276,7 @@ variable "ignore_machine_pools_deletion_error" {
 variable "enable_karpenter" {
   type        = bool
   default     = false
-  description = "Install-time toggle for Red Hat build of Karpenter (AutoNode). When true: creates the controller IAM role, sets cluster auto_node, and tags private subnets for discovery. Default false. Requires OpenShift >= 4.22. NodePools are day-2 GitOps (deploy_rosa_karpenter)."
+  description = "Install-time toggle for Red Hat build of Karpenter (AutoNode). When true: creates the controller IAM role, sets cluster auto_node, and tags private subnets for discovery. Default false. Requires OpenShift >= 4.22. Pair with deploy_rosa_karpenter=true on the GitOps overlay (and push operators/rosa-karpenter) in the same initial provision — AutoNode alone does not create NodePools."
 }
 
 variable "karpenter_role_name" {

@@ -42,6 +42,7 @@ terraform apply
 | `deploy_openshift_ai` | RHOAI + NFD/GPU/Serverless/Kueue/JobSet/cert-manager |
 | `deploy_rhoai_maas` | Implies AI + RHCL, LWS, LB Gateway, postgres, UWM, dashboard/telemetry, COO + OpenTelemetry + MCP catalog |
 | `deploy_rhoai_llmd` | Implies MaaS + KEDA + llm-d (default in this overlay’s tfvars) |
+| `deploy_rhoai_genai_studio_demo` | Implies MaaS + OGX + MLflow; syncs `demo` ns — then run `scripts/setup-genai-studio-mlflow-tracing.sh` ([docs](../../docs/rhoai-genai-studio-demo.md)) |
 | `deploy_openshift_lightspeed` | Lightspeed operator path + OLSConfig (uses MaaS sample model) |
 
 - `rhoai_genai_backend = "ogx"` (default) or `"llamastack"`

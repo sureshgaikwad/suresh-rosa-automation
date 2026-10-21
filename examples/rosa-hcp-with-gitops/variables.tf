@@ -73,6 +73,18 @@ variable "deploy_rhoai_maas_sample_model" {
   description = "When deploy_rhoai_maas is true, also sync the sample LLMInferenceService + MaaS governance CRs."
 }
 
+variable "deploy_rhoai_genai_studio_demo" {
+  type        = bool
+  default     = false
+  description = "Bootstrap GenAI Studio demo (demo ns + MLflow). Implies MaaS + OGX. After sync, run scripts/setup-genai-studio-mlflow-tracing.sh (rhoai-demo-guide pattern)."
+}
+
+variable "rhoai_genai_studio_demo_namespace" {
+  type        = string
+  default     = "demo"
+  description = "Namespace for the GenAI Studio playground demo project."
+}
+
 variable "deploy_rhoai_llmd_keda" {
   type        = bool
   default     = true
@@ -282,7 +294,7 @@ variable "deploy_authorino_operator" {
 variable "deploy_rosa_karpenter" {
   type        = bool
   default     = false
-  description = "Deploy Red Hat build of Karpenter NodePool via GitOps (operators/rosa-karpenter). Requires enable_karpenter=true on the cluster stack first."
+  description = "Deploy Red Hat build of Karpenter NodePool via GitOps (operators/rosa-karpenter). Set true during the initial GitOps apply when the cluster stack has enable_karpenter=true. Catalog path must already exist on gitops_repo_url. deploy-full-stack.sh enables this automatically when karpenter_enabled is true."
 }
 
 variable "deploy_nfd" {

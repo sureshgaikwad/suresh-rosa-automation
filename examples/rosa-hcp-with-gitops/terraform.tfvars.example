@@ -10,7 +10,9 @@ cluster_admin_password = "REPLACE_WITH_PASSWORD"
 deploy_openshift_gitops = true
 deploy_vote_application = true
 
-# Red Hat build of Karpenter NodePools (requires enable_karpenter=true on cluster stack)
+# Karpenter NodePools — set true in the *same* initial GitOps apply when the
+# cluster stack has enable_karpenter=true (and operators/rosa-karpenter is on git).
+# deploy-full-stack.sh sets this automatically from cluster enable_karpenter.
 # deploy_rosa_karpenter = true
 
 # ---------------------------------------------------------------------------
@@ -40,6 +42,12 @@ deploy_vote_application = true
 # OpenShift Lightspeed (OLSConfig in gitops-catalog points at the MaaS sample
 # model; catalog enables ToolFiltering + 8192 context for MCP tool schemas)
 # deploy_openshift_lightspeed = true
+
+# GenAI Studio guardrails + MLflow tracing demo (rhoai-demo-guide pattern).
+# Implies MaaS + OGX + MLflow. After Argo sync, run:
+#   ./scripts/setup-genai-studio-mlflow-tracing.sh --namespace demo
+# See docs/rhoai-genai-studio-demo.md
+# deploy_rhoai_genai_studio_demo = true
 
 # Optional: also sync the existing GPU qwen InferenceService from the catalog
 # deploy_ai_model = true

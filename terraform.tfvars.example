@@ -76,10 +76,12 @@ autoscaling_max_replicas        = 10
 
 # Red Hat build of Karpenter / AutoNode (OpenShift >= 4.22)
 # Opt-in at install time (default false). When true: IAM role + cluster auto_node
-# + private-subnet discovery tags. NodePools are day-2 GitOps.
+# + private-subnet discovery tags.
+# ALSO set deploy_rosa_karpenter = true in examples/rosa-hcp-with-gitops and push
+# operators/rosa-karpenter to gitops_repo_url — otherwise no NodePool, no scale-out.
+# deploy-full-stack.sh pairs these automatically when enable_karpenter=true.
 # enable_karpenter = true
 # karpenter_role_name = null  # optional override
-# Day-2 NodePools: examples/rosa-hcp-with-gitops deploy_rosa_karpenter = true
 
 # Example additional machine pools configuration:
 # machine_pools = {

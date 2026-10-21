@@ -152,7 +152,7 @@ terraform output cluster_console_url
 - **New VPC**: Set `create_vpc = true` (default) - automatically creates both public and private subnets
 - **Existing VPC**: Set `create_vpc = false` and provide `aws_subnet_ids` (private-only for private clusters; public + private for public clusters)
 - **Machine Pools**: Set `create_additional_machine_pools = true`
-- **Karpenter (AutoNode)**: Set `enable_karpenter = true` on the cluster stack; sync NodePools with day-2 `deploy_rosa_karpenter = true` (see [docs/rosa-karpenter.md](docs/rosa-karpenter.md))
+- **Karpenter (AutoNode)**: At install time set `enable_karpenter = true` **and** `deploy_rosa_karpenter = true` (GitOps), with `operators/rosa-karpenter` already on `gitops_repo_url`. `deploy-full-stack.sh` pairs the flags and fails if the catalog path is missing (see [docs/rosa-karpenter.md](docs/rosa-karpenter.md))
 - **GitOps**: Set `deploy_openshift_gitops = true` (default)
 - **Zero egress / private clusters**: See the GitOps connectivity note below
 

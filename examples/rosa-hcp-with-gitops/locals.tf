@@ -1,10 +1,11 @@
 locals {
   deploy_openshift_gitops = var.deploy_openshift_gitops
 
-  # Fan-out: llmd → maas → ai
-  deploy_rhoai_llmd   = var.deploy_rhoai_llmd
-  deploy_rhoai_maas   = var.deploy_rhoai_maas || local.deploy_rhoai_llmd
-  deploy_openshift_ai = var.deploy_openshift_ai || local.deploy_rhoai_maas
+  # Fan-out: genai-studio-demo → maas → ai ; llmd → maas → ai
+  deploy_rhoai_genai_studio_demo = var.deploy_rhoai_genai_studio_demo
+  deploy_rhoai_llmd              = var.deploy_rhoai_llmd
+  deploy_rhoai_maas              = var.deploy_rhoai_maas || local.deploy_rhoai_llmd || local.deploy_rhoai_genai_studio_demo
+  deploy_openshift_ai            = var.deploy_openshift_ai || local.deploy_rhoai_maas
 
   deploy_nfd                             = local.deploy_openshift_ai ? true : var.deploy_nfd
   deploy_nvidia_gpu_operator             = local.deploy_openshift_ai ? true : var.deploy_nvidia_gpu_operator
@@ -43,12 +44,27 @@ locals {
     : "maas-gateway-tls"
   )
 
-  rhoai_genai_component = var.rhoai_genai_backend == "ogx" ? "components/genai-ogx" : "components/llamastack"
+  # GenAI Studio demo requires OGX (not LlamaStack).
+  rhoai_genai_backend_effective = local.deploy_rhoai_genai_studio_demo ? "ogx" : var.rhoai_genai_backend
+  rhoai_genai_component         = local.rhoai_genai_backend_effective == "ogx" ? "components/genai-ogx" : "components/llamastack"
 
   openshift_ai_kustomize_components = compact(concat(
     [local.rhoai_genai_component],
     local.deploy_rhoai_maas ? ["components/maas-enable"] : [],
+    local.deploy_rhoai_genai_studio_demo ? ["components/mlflow-enable"] : [],
   ))
+
+  rhoai_genai_studio_demo_params_patch = [{
+    target = {
+      kind      = "ConfigMap"
+      name      = "rhoai-genai-studio-demo-params"
+      namespace = var.rhoai_genai_studio_demo_namespace
+    }
+    patch = yamlencode([
+      { op = "replace", path = "/data/maasGateway", value = "https://${local.rhoai_maas_hostname}" },
+      { op = "replace", path = "/data/modelName", value = var.rhoai_maas_model_display_name },
+    ])
+  }]
 
   openshift_ai_maas_kustomize_components = compact(concat(
     var.deploy_rhoai_maas_sample_model && local.deploy_rhoai_maas ? ["components/sample-model"] : [],
@@ -299,6 +315,17 @@ locals {
       dependency_weight    = 2
       kustomize_components = local.openshift_ai_maas_kustomize_components
       kustomize_patches    = local.rhoai_maas_params_patch
+    }
+    # GenAI Studio demo bootstrap (demo ns + MLflow). Playground/OTEL via script.
+    rhoai-genai-studio-demo = {
+      enabled              = local.deploy_rhoai_genai_studio_demo && local.deploy_openshift_gitops
+      path                 = "operators/rhoai-genai-studio-demo"
+      namespace            = var.rhoai_genai_studio_demo_namespace
+      repo_url             = local.catalog_repo
+      create_namespace     = true
+      dependency_weight    = 4
+      kustomize_components = []
+      kustomize_patches    = local.rhoai_genai_studio_demo_params_patch
     }
     custom-metrics-autoscaler = {
       enabled              = local.deploy_custom_metrics_autoscaler && local.deploy_openshift_gitops

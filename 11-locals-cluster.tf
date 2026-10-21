@@ -50,21 +50,9 @@ locals {
     }
   )
 
-  # AZ-keyed map so aws_ec2_tag for_each keys stay known during destroy
-  # (subnet IDs are apply-time values and break toset(subnet_id) for_each).
+  # AZ-keyed map so aws_ec2_tag for_each keys stay known at plan time.
+  # Do NOT gate this on cluster_id — that makes the whole map "(known after apply)".
   karpenter_discovery_subnets = var.enable_karpenter ? local.machine_pool_candidate_subnets_by_az : {}
-
-  # Only emit cluster discovery tags when AutoNode is on AND cluster_id is known.
-  # Avoids destroy/plan errors when the cluster resource is already gone.
-  karpenter_subnet_cluster_tags = (
-    var.enable_karpenter && try(module.rosa_cluster_hcp[0].cluster_id, null) != null
-    ) ? {
-    for az, subnet_id in local.karpenter_discovery_subnets :
-    az => {
-      subnet_id = subnet_id
-      tag_key   = "kubernetes.io/cluster/${module.rosa_cluster_hcp[0].cluster_id}"
-    }
-  } : {}
 
   machine_pool_selected_subnet_ids = {
     for pool_key, pool in var.machine_pools : pool_key => (
